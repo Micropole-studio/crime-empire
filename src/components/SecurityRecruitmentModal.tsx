@@ -1,0 +1,1153 @@
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+
+import { RESEARCHES } from "../data/researches"
+import { TROOPS } from "../data/troops"
+
+import ActionSpeedupsPanel from "./ActionSpeedupsPanel"
+
+import {
+  getActiveRecruitment,
+  getHighestBuildingLevel,
+  getRecruitmentRemainingSeconds,
+  getRecruitmentTimeSeconds,
+  getSecurityRecruitmentLimits,
+  getTroopRequirementsState,
+  startRecruitment,
+  syncCityRecruitments,
+} from "../services/troopService"
+
+import {
+  syncCityResearches,
+} from "../services/researchService"
+
+import type {
+  Building,
+} from "../types/building"
+
+import type {
+  CityResearch,
+} from "../types/research"
+
+import type {
+  CityTroop,
+  TroopType,
+} from "../types/troop"
+
+import type {
+  CityRecruitment,
+} from "../services/troopService"
+
+type CityResources = {
+  id: string
+  money: number
+  equipment: number
+  influence: number
+}
+
+type Props = {
+  city: CityResources
+  buildings: Building[]
+  onClose: () => void
+  onRecruitmentStarted?: () =>
+    Promise<void> | void
+}
+
+const TROOP_TYPES = Object.keys(
+  TROOPS
+) as TroopType[]
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat(
+    "fr-FR"
+  ).format(
+    Math.floor(Number(value) || 0)
+  )
+}
+
+function formatDuration(
+  totalSeconds: number
+) {
+  const safeSeconds = Math.max(
+    0,
+    Math.floor(totalSeconds)
+  )
+
+  const days = Math.floor(
+    safeSeconds / 86400
+  )
+
+  const hours = Math.floor(
+    (safeSeconds % 86400) / 3600
+  )
+
+  const minutes = Math.floor(
+    (safeSeconds % 3600) / 60
+  )
+
+  const seconds =
+    safeSeconds % 60
+
+  const parts: string[] = []
+
+  if (days > 0) {
+    parts.push(`${days} j`)
+  }
+
+  if (hours > 0) {
+    parts.push(`${hours} h`)
+  }
+
+  if (minutes > 0) {
+    parts.push(`${minutes} min`)
+  }
+
+  if (
+    seconds > 0 &&
+    days === 0 &&
+    hours === 0
+  ) {
+    parts.push(`${seconds} s`)
+  }
+
+  return parts.length > 0
+    ? parts.join(" ")
+    : "Terminé"
+}
+
+export default function SecurityRecruitmentModal({
+  city,
+  buildings,
+  onClose,
+  onRecruitmentStarted,
+}: Props) {
+  const [
+    cityTroops,
+    setCityTroops,
+  ] = useState<CityTroop[]>([])
+
+  const [
+    recruitments,
+    setRecruitments,
+  ] = useState<CityRecruitment[]>(
+    []
+  )
+
+  const [
+    researches,
+    setResearches,
+  ] = useState<CityResearch[]>([])
+
+  const [
+    quantities,
+    setQuantities,
+  ] = useState<
+    Record<TroopType, number>
+  >({
+    henchman_1: 1,
+    henchman_2: 1,
+    henchman_3: 1,
+    lieutenant_1: 1,
+  })
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true)
+
+  const [
+    startingTroop,
+    setStartingTroop,
+  ] = useState<TroopType | null>(
+    null
+  )
+
+  const [
+    errorMessage,
+    setErrorMessage,
+  ] = useState<string | null>(null)
+
+  const [
+    currentTime,
+    setCurrentTime,
+  ] = useState(() => Date.now())
+
+  const syncInProgress =
+    useRef(false)
+
+  const loadMilitaryData =
+    useCallback(async () => {
+      if (!city?.id) {
+        return
+      }
+
+      try {
+        setErrorMessage(null)
+
+        const [
+          recruitmentResult,
+          researchResult,
+        ] = await Promise.all([
+          syncCityRecruitments(
+            city.id
+          ),
+          syncCityResearches(
+            city.id
+          ),
+        ])
+
+        setCityTroops(
+          recruitmentResult.troops
+        )
+
+        setRecruitments(
+          recruitmentResult.recruitments
+        )
+
+        setResearches(
+          researchResult
+        )
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Impossible de charger les troupes"
+
+        setErrorMessage(message)
+      } finally {
+        setLoading(false)
+      }
+    }, [city.id])
+
+  useEffect(() => {
+    loadMilitaryData()
+  }, [loadMilitaryData])
+
+  useEffect(() => {
+    const intervalId =
+      window.setInterval(() => {
+        setCurrentTime(Date.now())
+      }, 1000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [])
+
+  useEffect(() => {
+    function handleKeyDown(
+      event: KeyboardEvent
+    ) {
+      if (event.key === "Escape") {
+        onClose()
+      }
+    }
+
+    const previousOverflow =
+      document.body.style.overflow
+
+    document.body.style.overflow =
+      "hidden"
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown
+    )
+
+    return () => {
+      document.body.style.overflow =
+        previousOverflow
+
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown
+      )
+    }
+  }, [onClose])
+
+  const securityLevel =
+    useMemo(
+      () =>
+        getHighestBuildingLevel(
+          buildings,
+          "wall"
+        ),
+      [buildings]
+    )
+
+  const laboratoryLevel =
+    useMemo(
+      () =>
+        getHighestBuildingLevel(
+          buildings,
+          "laboratory"
+        ),
+      [buildings]
+    )
+
+  const limits =
+  useMemo(
+    () =>
+      getSecurityRecruitmentLimits(
+        securityLevel,
+        researches
+      ),
+    [
+      securityLevel,
+      researches,
+    ]
+  )
+
+  const totalOwned =
+    useMemo(
+      () =>
+        cityTroops.reduce(
+          (total, troop) =>
+            total +
+            (Number(
+              troop.quantity
+            ) || 0),
+          0
+        ),
+      [cityTroops]
+    )
+
+  const remainingCapacity =
+    Math.max(
+      0,
+      limits.capacity -
+        totalOwned
+    )
+
+  const activeRecruitment =
+    useMemo(
+      () =>
+        getActiveRecruitment(
+          recruitments
+        ),
+      [recruitments]
+    )
+
+  const activeRemainingSeconds =
+    useMemo(() => {
+      if (!activeRecruitment) {
+        return 0
+      }
+
+      return getRecruitmentRemainingSeconds(
+        activeRecruitment,
+        currentTime
+      )
+    }, [
+      activeRecruitment,
+      currentTime,
+    ])
+
+  useEffect(() => {
+    if (
+      !activeRecruitment ||
+      activeRemainingSeconds > 0 ||
+      syncInProgress.current
+    ) {
+      return
+    }
+
+    syncInProgress.current = true
+
+    loadMilitaryData()
+      .then(async () => {
+        await onRecruitmentStarted?.()
+      })
+      .finally(() => {
+        syncInProgress.current = false
+      })
+  }, [
+    activeRecruitment,
+    activeRemainingSeconds,
+    loadMilitaryData,
+    onRecruitmentStarted,
+  ])
+
+  function getOwnedQuantity(
+    troopType: TroopType
+  ) {
+    return (
+      cityTroops.find(
+        (troop) =>
+          troop.troop_key ===
+          troopType
+      )?.quantity ?? 0
+    )
+  }
+
+  function updateQuantity(
+    troopType: TroopType,
+    value: number
+  ) {
+    const safeMaximum = Math.max(
+      1,
+      Math.min(
+        limits.maxOrder,
+        remainingCapacity
+      )
+    )
+
+    const safeValue = Math.min(
+      safeMaximum,
+      Math.max(
+        1,
+        Math.floor(
+          Number(value) || 1
+        )
+      )
+    )
+
+    setQuantities((previous) => ({
+      ...previous,
+      [troopType]: safeValue,
+    }))
+  }
+
+  async function handleRecruit(
+    troopType: TroopType
+  ) {
+    if (startingTroop) {
+      return
+    }
+
+    try {
+      setErrorMessage(null)
+      setStartingTroop(troopType)
+
+      await startRecruitment(
+        city.id,
+        troopType,
+        quantities[troopType]
+      )
+
+      await onRecruitmentStarted?.()
+      await loadMilitaryData()
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Impossible de lancer le recrutement"
+
+      setErrorMessage(message)
+    } finally {
+      setStartingTroop(null)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      onMouseDown={(event) => {
+        if (
+          event.target ===
+          event.currentTarget
+        ) {
+          onClose()
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="security-recruitment-title"
+        className="relative max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-red-500/30 bg-zinc-950 shadow-[0_25px_80px_rgba(0,0,0,0.8)]"
+      >
+        {/* EN-TÊTE */}
+        <div className="sticky top-0 z-20 overflow-hidden border-b border-zinc-800 bg-zinc-950/95 px-6 py-5 backdrop-blur-xl">
+          <div className="absolute inset-0 bg-gradient-to-r from-red-950/70 via-zinc-950 to-zinc-950" />
+
+          <div className="relative flex items-start justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <img
+                src="/buildings/wall.png"
+                alt=""
+                className="h-20 w-20 object-contain"
+                draggable={false}
+              />
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-400">
+                  Centre de recrutement
+                </p>
+
+                <h2
+                  id="security-recruitment-title"
+                  className="mt-1 text-2xl font-black text-white"
+                >
+                  Poste de Sécurité
+                </h2>
+
+                <p className="mt-1 text-sm text-zinc-400">
+                  Recrutez vos hommes et
+                  développez votre force
+                  militaire.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-xl text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
+              aria-label="Fermer"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-5 p-6">
+          {/* RÉSUMÉ */}
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <SummaryCard
+              label="Sécurité"
+              value={`Niv. ${securityLevel}`}
+              icon="🛡️"
+            />
+
+            <SummaryCard
+              label="Laboratoire"
+              value={`Niv. ${laboratoryLevel}`}
+              icon="🧪"
+            />
+
+            <SummaryCard
+              label="Troupes"
+              value={`${totalOwned} / ${limits.capacity}`}
+              icon="🕴️"
+            />
+
+            <SummaryCard
+              label="Commande max."
+              value={`${limits.maxOrder}`}
+              icon="📋"
+            />
+
+            <SummaryCard
+              label="Vitesse"
+              value={`+${limits.speedPercent} %`}
+              icon="⚡"
+            />
+          </section>
+
+          {/* RESSOURCES */}
+          <section className="grid gap-3 sm:grid-cols-3">
+            <ResourceSummary
+              icon="💵"
+              label="Argent"
+              value={city.money}
+            />
+
+            <ResourceSummary
+              icon="🧰"
+              label="Équipements"
+              value={city.equipment}
+            />
+
+            <ResourceSummary
+              icon="⭐"
+              label="Influence"
+              value={city.influence}
+            />
+          </section>
+
+          {/* RECRUTEMENT ACTIF */}
+          {activeRecruitment && (
+            <section className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-5">
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">
+                    Recrutement en cours
+                  </p>
+
+                  <h3 className="mt-1 text-lg font-black text-white">
+                    {
+                      TROOPS[
+                        activeRecruitment
+                          .troop_key
+                      ]?.name
+                    }
+                    {" × "}
+                    {
+                      activeRecruitment.quantity
+                    }
+                  </h3>
+
+                  <p className="mt-1 text-sm text-zinc-400">
+                    Une seule commande peut
+                    être entraînée à la fois.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-amber-400/20 bg-black/30 px-5 py-3 text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                    Temps restant
+                  </p>
+
+                  <p className="mt-1 whitespace-nowrap text-xl font-black text-amber-200">
+                    ⏱{" "}
+                    {formatDuration(
+                      activeRemainingSeconds
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <ActionSpeedupsPanel
+                cityId={city.id}
+                targetType="recruitment"
+                targetId={
+                  activeRecruitment.id
+                }
+                remainingSeconds={
+                  activeRemainingSeconds
+                }
+                title="Accélérer le recrutement"
+                description="Utilisez un accélérateur de recrutement ou un accélérateur universel directement sur cette commande."
+                accent="amber"
+                onApplied={async () => {
+                  await loadMilitaryData()
+                  await onRecruitmentStarted?.()
+                }}
+              />
+            </section>
+          )}
+
+          {errorMessage && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200">
+              {errorMessage}
+            </div>
+          )}
+
+          {/* UNITÉS */}
+          <section>
+            <div className="mb-4">
+              <h3 className="text-lg font-black text-white">
+                Unités disponibles
+              </h3>
+
+              <p className="mt-1 text-sm text-zinc-500">
+                Toutes les unités restent
+                visibles. Les niveaux de
+                Sécurité et les recherches
+                militaires déterminent celles
+                qui peuvent être recrutées.
+              </p>
+            </div>
+
+            {loading ? (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-8 text-center text-zinc-400">
+                Chargement des troupes...
+              </div>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {TROOP_TYPES.map(
+                  (troopType) => {
+                    const definition =
+                      TROOPS[troopType]
+
+                    const state =
+                      getTroopRequirementsState(
+                        troopType,
+                        buildings,
+                        researches
+                      )
+
+                    const quantity =
+                      quantities[troopType]
+
+                    const ownedQuantity =
+                      getOwnedQuantity(
+                        troopType
+                      )
+
+                    const totalMoney =
+                      definition.cost.money *
+                      quantity
+
+                    const totalEquipment =
+                      definition.cost
+                        .equipment *
+                      quantity
+
+                    const totalInfluence =
+                      definition.cost
+                        .influence *
+                      quantity
+
+                    const hasEnoughMoney =
+                      Number(city.money) >=
+                      totalMoney
+
+                    const hasEnoughEquipment =
+                      Number(
+                        city.equipment
+                      ) >=
+                      totalEquipment
+
+                    const hasEnoughInfluence =
+                      Number(
+                        city.influence
+                      ) >=
+                      totalInfluence
+
+                    const hasEnoughResources =
+                      hasEnoughMoney &&
+                      hasEnoughEquipment &&
+                      hasEnoughInfluence
+
+                    const maxSelectable =
+                      Math.min(
+                        limits.maxOrder,
+                        remainingCapacity
+                      )
+
+                    const hasCapacity =
+                      remainingCapacity > 0 &&
+                      maxSelectable > 0
+
+                    const canRecruit =
+                      state.unlocked &&
+                      hasEnoughResources &&
+                      hasCapacity &&
+                      !activeRecruitment &&
+                      !startingTroop
+
+                    const researchName =
+                      definition.researchRequired
+                        ? RESEARCHES[
+                            definition
+                              .researchRequired
+                          ]?.name
+                        : null
+
+                   const recruitmentTime =
+                      getRecruitmentTimeSeconds(
+                      troopType,
+                      quantity,
+                      securityLevel,
+                      researches
+                     )
+
+                    return (
+                      <article
+                        key={troopType}
+                        className={`rounded-2xl border p-5 transition ${
+                          state.unlocked
+                            ? "border-red-500/25 bg-red-500/5"
+                            : "border-zinc-800 bg-zinc-900/60"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-black/30 text-3xl">
+                            {
+                              definition.icon
+                            }
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <h4 className="font-black text-white">
+                                {
+                                  definition.name
+                                }
+                              </h4>
+
+                              <TroopStatusBadge
+                                unlocked={
+                                  state.unlocked
+                                }
+                              />
+                            </div>
+
+                            <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                              {
+                                definition.description
+                              }
+                            </p>
+
+                            <p className="mt-2 text-xs font-semibold text-zinc-300">
+                              Possédés :{" "}
+                              {formatNumber(
+                                ownedQuantity
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* STATISTIQUES */}
+                        <div className="mt-4 grid grid-cols-3 gap-2">
+                          <StatItem
+                            label="Attaque"
+                            value={
+                              definition.stats
+                                .attack
+                            }
+                          />
+
+                          <StatItem
+                            label="Défense"
+                            value={
+                              definition.stats
+                                .defense
+                            }
+                          />
+
+                          <StatItem
+                            label="Vie"
+                            value={
+                              definition.stats
+                                .health
+                            }
+                          />
+                        </div>
+
+                        {/* CONDITIONS */}
+                        <div className="mt-4 space-y-2 rounded-xl bg-black/20 p-3">
+                          <RequirementLine
+                            valid={
+                              state.hasSecurityLevel
+                            }
+                            text={`Sécurité niveau ${definition.securityLevelRequired}`}
+                            current={`Actuel : ${state.securityLevel}`}
+                          />
+
+                          {definition.laboratoryLevelRequired >
+                            0 && (
+                            <RequirementLine
+                              valid={
+                                state.hasLaboratoryLevel
+                              }
+                              text={`Laboratoire niveau ${definition.laboratoryLevelRequired}`}
+                              current={`Actuel : ${state.laboratoryLevel}`}
+                            />
+                          )}
+
+                          {definition.researchRequired && (
+                            <RequirementLine
+                              valid={
+                                state.hasRequiredResearch
+                              }
+                              text={`Recherche « ${researchName} »`}
+                              current={
+                                state.hasRequiredResearch
+                                  ? "Terminée"
+                                  : "Non terminée"
+                              }
+                            />
+                          )}
+                        </div>
+
+                        {/* QUANTITÉ */}
+                        <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-black/20 p-3">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                              Quantité
+                            </p>
+
+                            <p className="mt-1 text-xs text-zinc-400">
+                              Maximum actuel :{" "}
+                              {Math.max(
+                                0,
+                                maxSelectable
+                              )}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateQuantity(
+                                  troopType,
+                                  quantity - 1
+                                )
+                              }
+                              disabled={
+                                quantity <= 1
+                              }
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 font-black text-white disabled:opacity-40"
+                            >
+                              −
+                            </button>
+
+                            <input
+                              type="number"
+                              min="1"
+                              max={Math.max(
+                                1,
+                                maxSelectable
+                              )}
+                              value={quantity}
+                              onChange={(event) =>
+                                updateQuantity(
+                                  troopType,
+                                  Number(
+                                    event.target
+                                      .value
+                                  )
+                                )
+                              }
+                              className="h-9 w-16 rounded-lg border border-zinc-700 bg-zinc-950 text-center font-black text-white outline-none focus:border-red-500"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateQuantity(
+                                  troopType,
+                                  quantity + 1
+                                )
+                              }
+                              disabled={
+                                quantity >=
+                                Math.max(
+                                  1,
+                                  maxSelectable
+                                )
+                              }
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 font-black text-white disabled:opacity-40"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* COÛT */}
+                        <div className="mt-4 grid grid-cols-3 gap-2">
+                          <CostItem
+                            icon="💵"
+                            value={
+                              totalMoney
+                            }
+                            valid={
+                              hasEnoughMoney
+                            }
+                          />
+
+                          <CostItem
+                            icon="🧰"
+                            value={
+                              totalEquipment
+                            }
+                            valid={
+                              hasEnoughEquipment
+                            }
+                          />
+
+                          <CostItem
+                            icon="⭐"
+                            value={
+                              totalInfluence
+                            }
+                            valid={
+                              hasEnoughInfluence
+                            }
+                          />
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between text-xs">
+                          <span className="text-zinc-500">
+                            Temps total
+                          </span>
+
+                          <span className="font-bold text-zinc-300">
+                            ⏱{" "}
+                            {formatDuration(
+                              recruitmentTime
+                            )}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={!canRecruit}
+                          onClick={() =>
+                            handleRecruit(
+                              troopType
+                            )
+                          }
+                          className="mt-4 w-full rounded-xl bg-red-700 px-4 py-3 text-sm font-black text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
+                        >
+                          {!state.unlocked
+                            ? definition.researchRequired &&
+                              !state.hasRequiredResearch
+                              ? "Recherche militaire requise"
+                              : "Conditions non remplies"
+                            : activeRecruitment
+                              ? "Un recrutement est déjà en cours"
+                              : !hasCapacity
+                                ? "Capacité militaire atteinte"
+                                : !hasEnoughResources
+                                  ? "Ressources insuffisantes"
+                                  : startingTroop ===
+                                      troopType
+                                    ? "Lancement..."
+                                    : `Recruter × ${quantity}`}
+                        </button>
+                      </article>
+                    )
+                  }
+                )}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type SummaryCardProps = {
+  icon: string
+  label: string
+  value: string
+}
+
+function SummaryCard({
+  icon,
+  label,
+  value,
+}: SummaryCardProps) {
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-3">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+        {icon} {label}
+      </p>
+
+      <p className="mt-1 text-sm font-black text-white">
+        {value}
+      </p>
+    </div>
+  )
+}
+
+type ResourceSummaryProps = {
+  icon: string
+  label: string
+  value: number
+}
+
+function ResourceSummary({
+  icon,
+  label,
+  value,
+}: ResourceSummaryProps) {
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+        {icon} {label}
+      </p>
+
+      <p className="mt-1 text-lg font-black text-white">
+        {formatNumber(value)}
+      </p>
+    </div>
+  )
+}
+
+type RequirementLineProps = {
+  valid: boolean
+  text: string
+  current: string
+}
+
+function RequirementLine({
+  valid,
+  text,
+  current,
+}: RequirementLineProps) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-xs">
+      <span
+        className={
+          valid
+            ? "font-semibold text-green-300"
+            : "font-semibold text-red-300"
+        }
+      >
+        {valid ? "✓" : "✗"} {text}
+      </span>
+
+      <span className="text-zinc-500">
+        {current}
+      </span>
+    </div>
+  )
+}
+
+type CostItemProps = {
+  icon: string
+  value: number
+  valid: boolean
+}
+
+function CostItem({
+  icon,
+  value,
+  valid,
+}: CostItemProps) {
+  return (
+    <div
+      className={`rounded-lg border px-2 py-2 text-center text-xs font-bold ${
+        valid
+          ? "border-green-500/20 bg-green-500/5 text-green-200"
+          : "border-red-500/20 bg-red-500/5 text-red-200"
+      }`}
+    >
+      {icon} {formatNumber(value)}
+    </div>
+  )
+}
+
+type StatItemProps = {
+  label: string
+  value: number
+}
+
+function StatItem({
+  label,
+  value,
+}: StatItemProps) {
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-black/20 px-2 py-2 text-center">
+      <p className="text-[9px] font-bold uppercase tracking-wide text-zinc-500">
+        {label}
+      </p>
+
+      <p className="mt-1 text-sm font-black text-white">
+        {formatNumber(value)}
+      </p>
+    </div>
+  )
+}
+
+function TroopStatusBadge({
+  unlocked,
+}: {
+  unlocked: boolean
+}) {
+  if (unlocked) {
+    return (
+      <span className="rounded-full border border-green-500/30 bg-green-500/10 px-2 py-1 text-[10px] font-bold uppercase text-green-300">
+        Disponible
+      </span>
+    )
+  }
+
+  return (
+    <span className="rounded-full border border-zinc-700 bg-zinc-800 px-2 py-1 text-[10px] font-bold uppercase text-zinc-500">
+      Verrouillée
+    </span>
+  )
+}
