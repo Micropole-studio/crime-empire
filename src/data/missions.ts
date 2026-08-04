@@ -9,58 +9,80 @@ export const MISSIONS: Record<
 > = {
   market_collection: {
     key: "market_collection",
-    name: "Collecte au marché",
+    name: "Racket du marché",
     description:
-      "Envoyez quelques hommes récupérer les contributions des commerçants du quartier.",
+      "Envoyez quelques hommes récupérer les contributions imposées aux commerçants du quartier.",
+
     icon: "💼",
     category: "collection",
+
     baseDurationSeconds: 60,
+
     requiredSecurityLevel: 1,
     minimumTroops: 2,
+
     allowedTroops: [
       "henchman_1",
     ],
+
     rewardItemKey:
       "money_bag",
+
     rewardRange: {
-      moneyMin: 300,
-      moneyMax: 500,
+      moneyMin: 500,
+      moneyMax: 1000,
+
       materialsMin: 0,
       materialsMax: 0,
+
       influenceMin: 0,
       influenceMax: 0,
+
       equipmentMin: 0,
       equipmentMax: 0,
     },
-    commanderXp: 10,
+
+    commanderXp: 50,
+    dailyLimit: 2,
   },
 
   construction_recovery: {
     key: "construction_recovery",
-    name: "Récupération sur un chantier",
+    name: "Récupération de matériel",
     description:
-      "Une équipe part récupérer des matériaux laissés sur un chantier peu surveillé.",
+      "Une équipe part récupérer des matériaux et des équipements sur un chantier peu surveillé.",
+
     icon: "🏗️",
     category: "collection",
+
     baseDurationSeconds: 120,
+
     requiredSecurityLevel: 1,
     minimumTroops: 3,
+
     allowedTroops: [
       "henchman_1",
     ],
+
     rewardItemKey:
       "material_crate",
+
     rewardRange: {
       moneyMin: 0,
       moneyMax: 0,
-      materialsMin: 10,
-      materialsMax: 20,
+
+      materialsMin: 20,
+      materialsMax: 30,
+
       influenceMin: 0,
       influenceMax: 0,
-      equipmentMin: 0,
-      equipmentMax: 0,
+
+      equipmentMin: 2,
+      equipmentMax: 5,
     },
-    commanderXp: 15,
+
+    commanderXp: 80,
+    dailyLimit: 2,
   },
 }
 

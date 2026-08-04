@@ -23,6 +23,7 @@ import {
   claimCityMissionReward,
   getActiveMission,
   getAssignedTroopQuantity,
+  getCityMissionAvailability,
   getCompletedMissions,
   getMissionRemainingSeconds,
   startCityMission,
@@ -40,6 +41,7 @@ import type {
 
 import type {
   CityMission,
+  MissionAvailability,
   MissionDefinition,
   MissionType,
 } from "../types/mission"
@@ -139,6 +141,111 @@ function formatDuration(
     : "Terminé"
 }
 
+function getDefaultAvailability(
+  missionType: MissionType
+): MissionAvailability {
+  const now =
+    new Date()
+
+  const periodStart =
+    new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate()
+      )
+    )
+
+  const resetAt =
+    new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() + 1
+      )
+    )
+
+  return {
+    mission_key:
+      missionType,
+
+    daily_limit:
+      2,
+
+    uses_count:
+      0,
+
+    uses_remaining:
+      2,
+
+    period_start:
+      periodStart
+        .toISOString()
+        .slice(0, 10),
+
+    reset_at:
+      resetAt.toISOString(),
+  }
+}
+
+function createAvailabilityMap(
+  items: MissionAvailability[]
+): Record<
+  MissionType,
+  MissionAvailability
+> {
+  const result: Record<
+    MissionType,
+    MissionAvailability
+  > = {
+    market_collection:
+      getDefaultAvailability(
+        "market_collection"
+      ),
+
+    construction_recovery:
+      getDefaultAvailability(
+        "construction_recovery"
+      ),
+  }
+
+  for (const item of items) {
+    result[
+      item.mission_key
+    ] = item
+  }
+
+  return result
+}
+
+function getResetRemainingSeconds(
+  resetAt: string,
+  currentTime: number
+) {
+  const resetTime =
+    new Date(
+      resetAt
+    ).getTime()
+
+  if (
+    Number.isNaN(
+      resetTime
+    )
+  ) {
+    return 0
+  }
+
+  return Math.max(
+    0,
+    Math.ceil(
+      (
+        resetTime -
+        currentTime
+      ) / 1000
+    )
+  )
+}
+
 function getOwnedTroopQuantity(
   troops: CityTroop[],
   troopKey: string
@@ -181,6 +288,18 @@ export default function MissionsModal({
     troops,
     setTroops,
   ] = useState<CityTroop[]>([])
+
+  const [
+    availability,
+    setAvailability,
+  ] = useState<
+    Record<
+      MissionType,
+      MissionAvailability
+    >
+  >(() =>
+    createAvailabilityMap([])
+  )
 
   const [
     quantities,
@@ -246,12 +365,17 @@ export default function MissionsModal({
         const [
           missionResult,
           troopResult,
+          availabilityResult,
         ] = await Promise.all([
           syncCityMissions(
             city.id
           ),
 
           getCityTroops(
+            city.id
+          ),
+
+          getCityMissionAvailability(
             city.id
           ),
         ])
@@ -262,6 +386,12 @@ export default function MissionsModal({
 
         setTroops(
           troopResult
+        )
+
+        setAvailability(
+          createAvailabilityMap(
+            availabilityResult
+          )
         )
       } catch (error) {
         setErrorMessage(
@@ -410,6 +540,32 @@ export default function MissionsModal({
       0,
       totalHenchmen -
         assignedHenchmen
+    )
+
+  const totalDailyAttempts =
+    MISSION_LIST.reduce(
+      (
+        total,
+        definition
+      ) =>
+        total +
+        availability[
+          definition.key
+        ].daily_limit,
+      0
+    )
+
+  const remainingDailyAttempts =
+    MISSION_LIST.reduce(
+      (
+        total,
+        definition
+      ) =>
+        total +
+        availability[
+          definition.key
+        ].uses_remaining,
+      0
     )
 
   function changeQuantity(
@@ -594,7 +750,7 @@ export default function MissionsModal({
         </header>
 
         <div className="space-y-5 p-6">
-          <section className="grid gap-3 sm:grid-cols-3">
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard
               label="Hommes de main I"
               value={formatNumber(
@@ -624,6 +780,15 @@ export default function MissionsModal({
                 Boolean(
                   activeMission
                 )
+              }
+            />
+
+            <SummaryCard
+              label="Tentatives du jour"
+              value={`${remainingDailyAttempts} / ${totalDailyAttempts}`}
+              warning={
+                remainingDailyAttempts <=
+                0
               }
             />
           </section>
@@ -729,10 +894,21 @@ export default function MissionsModal({
                       availableHenchmen >=
                       definition.minimumTroops
 
+                    const missionAvailability =
+                      availability[
+                        definition.key
+                      ]
+
+                    const hasDailyAttempt =
+                      missionAvailability
+                        .uses_remaining >
+                      0
+
                     const canStart =
                       !activeMission &&
                       hasSecurityLevel &&
                       hasEnoughTroops &&
+                      hasDailyAttempt &&
                       !startingMission
 
                     return (
@@ -757,6 +933,12 @@ export default function MissionsModal({
                         }
                         commanderSkills={
                           commanderSkills
+                        }
+                        availability={
+                          missionAvailability
+                        }
+                        currentTime={
+                          currentTime
                         }
                         activeMission={
                           Boolean(
@@ -950,6 +1132,8 @@ type MissionCardProps = {
   currentSecurityLevel: number
   commanderLevel: number
   commanderSkills: CommanderSkills
+  availability: MissionAvailability
+  currentTime: number
   activeMission: boolean
   starting: boolean
   canStart: boolean
@@ -966,6 +1150,8 @@ function MissionCard({
   currentSecurityLevel,
   commanderLevel,
   commanderSkills,
+  availability,
+  currentTime,
   activeMission,
   starting,
   canStart,
@@ -996,6 +1182,17 @@ function MissionCard({
     availableTroops >=
     definition.minimumTroops
 
+  const hasDailyAttempt =
+    availability
+      .uses_remaining >
+    0
+
+  const resetRemainingSeconds =
+    getResetRemainingSeconds(
+      availability.reset_at,
+      currentTime
+    )
+
   return (
     <article className="rounded-2xl border border-zinc-800 bg-zinc-900/65 p-5">
       <div className="flex items-start gap-4">
@@ -1012,6 +1209,80 @@ function MissionCard({
             {definition.description}
           </p>
         </div>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/[0.07] p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-wider text-blue-300/70">
+              Tentatives quotidiennes
+            </p>
+
+            <div className="mt-2 flex items-center gap-1.5">
+              {Array.from({
+                length:
+                  availability
+                    .daily_limit,
+              }).map(
+                (
+                  _,
+                  index
+                ) => {
+                  const available =
+                    index <
+                    availability
+                      .uses_remaining
+
+                  return (
+                    <span
+                      key={
+                        index
+                      }
+                      className={`h-2.5 w-2.5 rounded-full border ${
+                        available
+                          ? "border-blue-300 bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.65)]"
+                          : "border-zinc-700 bg-zinc-900"
+                      }`}
+                    />
+                  )
+                }
+              )}
+            </div>
+          </div>
+
+          <p
+            className={`text-lg font-black ${
+              hasDailyAttempt
+                ? "text-blue-200"
+                : "text-red-300"
+            }`}
+          >
+            {
+              availability
+                .uses_remaining
+            }
+            {" / "}
+            {
+              availability
+                .daily_limit
+            }
+          </p>
+        </div>
+
+        {!hasDailyAttempt && (
+          <p className="mt-2 text-xs font-semibold text-red-200">
+            Nouvelles tentatives dans{" "}
+            {formatDuration(
+              resetRemainingSeconds
+            )}
+          </p>
+        )}
+
+        <p className="mt-2 text-[10px] leading-relaxed text-zinc-600">
+          Réinitialisation quotidienne à
+          minuit UTC. Une tentative est
+          consommée dès le lancement.
+        </p>
       </div>
 
       <div className="mt-4 space-y-2 rounded-xl bg-black/20 p-3">
@@ -1112,13 +1383,15 @@ function MissionCard({
       >
         {starting
           ? "Départ..."
-          : activeMission
-            ? "Une mission est déjà en cours"
-            : !hasSecurityLevel
-              ? "Niveau de Sécurité insuffisant"
-              : !hasEnoughTroops
-                ? "Pas assez de troupes"
-                : "Lancer la mission"}
+          : !hasDailyAttempt
+            ? "Tentatives épuisées"
+            : activeMission
+              ? "Une mission est déjà en cours"
+              : !hasSecurityLevel
+                ? "Niveau de Sécurité insuffisant"
+                : !hasEnoughTroops
+                  ? "Pas assez de troupes"
+                  : "Lancer la mission"}
       </button>
     </article>
   )
@@ -1231,7 +1504,7 @@ function RewardRange({
     parts.push(
       `🧠 +${formatNumber(
         definition.commanderXp
-      )} XP de commandant`
+      )} XP de commandant (base)`
     )
   }
 

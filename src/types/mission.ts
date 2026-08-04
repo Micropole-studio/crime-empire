@@ -44,6 +44,16 @@ export type MissionDefinition = {
   rewardItemKey: string
   rewardRange: MissionRewardRange
   commanderXp: number
+  dailyLimit: number
+}
+
+export type MissionAvailability = {
+  mission_key: MissionType
+  daily_limit: number
+  uses_count: number
+  uses_remaining: number
+  period_start: string
+  reset_at: string
 }
 
 export type MissionTroopAssignment = {

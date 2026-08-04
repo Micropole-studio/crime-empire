@@ -3,6 +3,7 @@ import { supabase } from "./supabase"
 import type {
   CityMission,
   ClaimMissionResult,
+  MissionAvailability,
   MissionType,
 } from "../types/mission"
 
@@ -31,6 +32,61 @@ function normalizeMission(
         ? mission.assigned_troops
         : [],
   } as CityMission
+}
+
+function normalizeAvailability(
+  availability: any
+): MissionAvailability {
+  const dailyLimit =
+    Math.max(
+      1,
+      Number(
+        availability?.daily_limit
+      ) || 2
+    )
+
+  const usesCount =
+    Math.max(
+      0,
+      Number(
+        availability?.uses_count
+      ) || 0
+    )
+
+  return {
+    mission_key:
+      availability
+        .mission_key as MissionType,
+
+    daily_limit:
+      dailyLimit,
+
+    uses_count:
+      usesCount,
+
+    uses_remaining:
+      Math.max(
+        0,
+        Number(
+          availability
+            ?.uses_remaining
+        ) ||
+          dailyLimit -
+            usesCount
+      ),
+
+    period_start:
+      String(
+        availability
+          ?.period_start ?? ""
+      ),
+
+    reset_at:
+      String(
+        availability
+          ?.reset_at ?? ""
+      ),
+  }
 }
 
 export async function getCityMissions(
@@ -88,6 +144,44 @@ export async function getCityMissions(
 
   return (data ?? []).map(
     normalizeMission
+  )
+}
+
+export async function getCityMissionAvailability(
+  cityId: string
+): Promise<MissionAvailability[]> {
+  if (!cityId) {
+    throw new Error(
+      "Impossible de charger les tentatives quotidiennes : City ID manquant"
+    )
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase.rpc(
+    "get_city_mission_availability",
+    {
+      p_city_id:
+        cityId,
+    }
+  )
+
+  if (error) {
+    console.error(
+      "Erreur pendant le chargement des tentatives quotidiennes :",
+      error
+    )
+
+    throw error
+  }
+
+  return (
+    Array.isArray(data)
+      ? data
+      : []
+  ).map(
+    normalizeAvailability
   )
 }
 
