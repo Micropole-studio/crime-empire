@@ -179,7 +179,7 @@ export default function GameHud({
     "C"
 
   return (
-    <header className="sticky top-0 z-[1000]">
+    <header className="w-full">
       <div className="overflow-hidden rounded-xl border border-red-900/40 bg-gradient-to-r from-zinc-950 via-red-950/30 to-zinc-950 shadow-[0_8px_24px_rgba(0,0,0,0.55)] backdrop-blur-xl">
         <div className="flex flex-col gap-2 p-2.5 lg:flex-row lg:items-stretch">
           {/* COMMANDANT */}
@@ -278,7 +278,7 @@ export default function GameHud({
           </div>
 
           {/* MENUS */}
-          <nav className="grid grid-cols-3 gap-1.5 lg:w-[228px] lg:shrink-0">
+          <nav className="hidden grid-cols-3 gap-1.5 lg:grid lg:w-[228px] lg:shrink-0">
             <HudButton
               icon="📦"
               label="Coffre"

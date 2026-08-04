@@ -1,6 +1,12 @@
-import { useEffect, useState } from "react"
+import {
+  useEffect,
+  useState,
+} from "react"
 
-import { getPlayerCity } from "./services/gameData"
+import {
+  getPlayerCity,
+} from "./services/gameData"
+
 import {
   calculateEconomy,
 } from "./services/economy"
@@ -23,18 +29,22 @@ import type {
 
 import {
   upgradeBuilding,
-  getUpgradeCost,
 } from "./services/buildingService"
 
-import { syncEconomy } from "./services/syncEconomy"
-import { syncBuildings } from "./services/buildingSync"
+import {
+  syncEconomy,
+} from "./services/syncEconomy"
 
-import { BUILDING_NAMES } from "./data/buildingNames"
+import {
+  syncBuildings,
+} from "./services/buildingSync"
 
-import CityView from "./components/CityView"
+import {
+  BUILDING_NAMES,
+} from "./data/buildingNames"
+
 import BuildingUpgradeModal from "./components/BuildingUpgradeModal"
 import GameHud from "./components/game/GameHud"
-
 import GameMap from "./components/map/GameMap"
 import MapEditor from "./components/map/MapEditor"
 import LaboratoryResearchModal from "./components/LaboratoryResearchModal"
@@ -50,6 +60,10 @@ type GameData = {
   commanderSkills: CommanderSkills
 }
 
+type GameMode =
+  | "city"
+  | "editor"
+
 function getSafeRate(
   value: unknown,
   fallback: number
@@ -64,161 +78,196 @@ function getSafeRate(
     : fallback
 }
 
-// =====================================================
-// TIMER
-// =====================================================
-
-function getRemainingTime(
-  finishDate?: string | null
-) {
-  if (!finishDate) {
-    return {
-      total: 0,
-      text: "En construction",
-    }
-  }
-
-  const now = Date.now()
-  const end = new Date(finishDate).getTime()
-
-  if (Number.isNaN(end)) {
-    return {
-      total: 0,
-      text: "Date invalide",
-    }
-  }
-
-  const diff = Math.max(0, end - now)
-
-  const seconds =
-    Math.floor(diff / 1000) % 60
-
-  const minutes =
-    Math.floor(diff / (1000 * 60)) % 60
-
-  const hours =
-    Math.floor(diff / (1000 * 60 * 60))
-
-  return {
-    total: diff,
-
-    text: `${hours
-      .toString()
-      .padStart(2, "0")}:${minutes
-      .toString()
-      .padStart(2, "0")}:${seconds
-      .toString()
-      .padStart(2, "0")}`,
-  }
-}
-
 export default function App() {
-  const [data, setData] =
-    useState<GameData | null>(null)
+  const [
+    data,
+    setData,
+  ] =
+    useState<GameData | null>(
+      null
+    )
 
-  const [loading, setLoading] =
+  const [
+    loading,
+    setLoading,
+  ] =
     useState(true)
 
   const [
     effectiveEconomy,
     setEffectiveEconomy,
-  ] = useState<EconomyResult | null>(
-    null
-  )
+  ] =
+    useState<EconomyResult | null>(
+      null
+    )
 
   const [
     selectedBuildingId,
     setSelectedBuildingId,
-  ] = useState<string | null>(null)
+  ] =
+    useState<string | null>(
+      null
+    )
 
   const [
     notifications,
     setNotifications,
-  ] = useState<string[]>([])
+  ] =
+    useState<string[]>(
+      []
+    )
 
-  const [mode, setMode] = useState<
-    "city" | "map" | "editor"
-  >("city")
+  const [
+    mode,
+    setMode,
+  ] =
+    useState<GameMode>(
+      "city"
+    )
 
-  const email = "test@test.com"
-  
+  const email =
+    "test@test.com"
+
   const [
     isResearchModalOpen,
     setIsResearchModalOpen,
-  ] = useState(false)
+  ] =
+    useState(false)
 
   const [
     isRecruitmentModalOpen,
     setIsRecruitmentModalOpen,
-  ] = useState(false)
-  
+  ] =
+    useState(false)
+
   const [
-  isInventoryModalOpen,
-  setIsInventoryModalOpen,
-] = useState(false)
+    isInventoryModalOpen,
+    setIsInventoryModalOpen,
+  ] =
+    useState(false)
 
   const [
     isMissionsModalOpen,
     setIsMissionsModalOpen,
-  ] = useState(false)
+  ] =
+    useState(false)
 
   const [
     isCommanderModalOpen,
     setIsCommanderModalOpen,
-  ] = useState(false)
-
-
-  // =====================================================
-  // NOTIFICATIONS
-  // =====================================================
+  ] =
+    useState(false)
 
   function pushNotification(
     message: string
   ) {
-    setNotifications((previous) => [
-      ...previous,
-      message,
-    ])
+    setNotifications(
+      (previous) => [
+        ...previous,
+        message,
+      ]
+    )
 
-    window.setTimeout(() => {
-      setNotifications((previous) =>
-        previous.slice(1)
-      )
-    }, 3000)
+    window.setTimeout(
+      () => {
+        setNotifications(
+          (previous) =>
+            previous.slice(1)
+        )
+      },
+      3000
+    )
   }
 
-  function changeMode(
-    nextMode: "city" | "map" | "editor"
-  ) {
-    setSelectedBuildingId(null)
-    setIsResearchModalOpen(false)
-    setIsRecruitmentModalOpen(false)
-    setIsInventoryModalOpen(false)
-    setIsMissionsModalOpen(false)
-    setIsCommanderModalOpen(false)
-    setMode(nextMode)
+  function closeAllPanels() {
+    setSelectedBuildingId(
+      null
+    )
+
+    setIsResearchModalOpen(
+      false
+    )
+
+    setIsRecruitmentModalOpen(
+      false
+    )
+
+    setIsInventoryModalOpen(
+      false
+    )
+
+    setIsMissionsModalOpen(
+      false
+    )
+
+    setIsCommanderModalOpen(
+      false
+    )
   }
 
-  // =====================================================
-  // CHARGEMENT DU JEU
-  // =====================================================
+  function openInventory() {
+    closeAllPanels()
+
+    setIsInventoryModalOpen(
+      true
+    )
+  }
+
+  function openTroops() {
+    closeAllPanels()
+
+    setIsRecruitmentModalOpen(
+      true
+    )
+  }
+
+  function openMissions() {
+    closeAllPanels()
+
+    setIsMissionsModalOpen(
+      true
+    )
+  }
+
+  function openCommander() {
+    closeAllPanels()
+
+    setIsCommanderModalOpen(
+      true
+    )
+  }
+
+  function openCity() {
+    closeAllPanels()
+
+    setMode(
+      "city"
+    )
+  }
+
+  function openEditor() {
+    closeAllPanels()
+
+    setMode(
+      "editor"
+    )
+  }
 
   async function loadGame() {
     try {
-      /*
-       * On termine d'abord les constructions,
-       * puis on recalcule l'économie avec les
-       * niveaux réellement à jour.
-       */
       const initialResult =
-        await getPlayerCity(email)
+        await getPlayerCity(
+          email
+        )
 
       await syncBuildings(
         initialResult.buildings
       )
 
       const synchronizedResult =
-        await getPlayerCity(email)
+        await getPlayerCity(
+          email
+        )
 
       const economyResult =
         await syncEconomy(
@@ -227,7 +276,9 @@ export default function App() {
         )
 
       const refreshed =
-        await getPlayerCity(email)
+        await getPlayerCity(
+          email
+        )
 
       const baseRates =
         calculateEconomy(
@@ -270,15 +321,22 @@ export default function App() {
           ),
       })
 
-      setData(refreshed)
-      setLoading(false)
+      setData(
+        refreshed
+      )
+
+      setLoading(
+        false
+      )
     } catch (error) {
       console.error(
         "Erreur pendant le chargement du jeu :",
         error
       )
 
-      setLoading(false)
+      setLoading(
+        false
+      )
     }
   }
 
@@ -286,30 +344,30 @@ export default function App() {
     loadGame()
 
     const interval =
-      window.setInterval(() => {
-        loadGame()
-      }, 10000)
+      window.setInterval(
+        () => {
+          loadGame()
+        },
+        10000
+      )
 
     return () => {
-      window.clearInterval(interval)
+      window.clearInterval(
+        interval
+      )
     }
   }, [])
 
-  // =====================================================
-  // CHARGEMENT
-  // =====================================================
-
-  if (loading || !data) {
+  if (
+    loading ||
+    !data
+  ) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black text-white">
+      <div className="flex h-[100dvh] items-center justify-center bg-black text-white">
         Loading Crime Empire...
       </div>
     )
   }
-
-  // =====================================================
-  // DONNÉES DU JOUEUR
-  // =====================================================
 
   const baseEconomy =
     calculateEconomy(
@@ -326,64 +384,67 @@ export default function App() {
     effectiveEconomy ??
     fallbackEconomy
 
-  const commanderLevel = Math.max(
-    1,
-    Number(data.player.commander_level) ||
-      1
-  )
+  const commanderLevel =
+    Math.max(
+      1,
+      Number(
+        data.player
+          .commander_level
+      ) ||
+        1
+    )
 
   const playerName =
     data.player.username ||
     data.player.email ||
     "Commandant"
 
-  // =====================================================
-  // NIVEAU RÉEL DE LA VILLA
-  // =====================================================
+  const villa =
+    data.buildings
+      .filter(
+        (building) =>
+          building.type ===
+          "villa"
+      )
+      .reduce<Building | null>(
+        (
+          highestVilla,
+          currentVilla
+        ) => {
+          if (
+            !highestVilla
+          ) {
+            return currentVilla
+          }
 
-  const villa = data.buildings
-    .filter(
-      (building) =>
-        building.type === "villa"
+          return Number(
+            currentVilla.level
+          ) >
+            Number(
+              highestVilla.level
+            )
+            ? currentVilla
+            : highestVilla
+        },
+        null
+      )
+
+  const currentVillaLevel =
+    Math.max(
+      1,
+      Number(
+        villa?.level
+      ) ||
+        1
     )
-    .reduce<Building | null>(
-      (
-        highestVilla,
-        currentVilla
-      ) => {
-        if (!highestVilla) {
-          return currentVilla
-        }
-
-        return Number(
-          currentVilla.level
-        ) >
-          Number(highestVilla.level)
-          ? currentVilla
-          : highestVilla
-      },
-      null
-    )
-
-  const currentVillaLevel = Math.max(
-    1,
-    Number(villa?.level) || 1
-  )
-
-  // =====================================================
-  // BÂTIMENT SÉLECTIONNÉ
-  // =====================================================
 
   const selectedBuilding =
     data.buildings.find(
       (building) =>
         building.id ===
         selectedBuildingId
-    ) ?? null
-
-  // =====================================================
-  // AMÉLIORATION DU BÂTIMENT SÉLECTIONNÉ
-  // =====================================================
+    ) ??
+    null
 
   async function handleSelectedBuildingUpgrade() {
     if (
@@ -405,23 +466,23 @@ export default function App() {
       `🏗️ ${
         BUILDING_NAMES[
           selectedBuilding.type
-        ] || selectedBuilding.type
+        ] ||
+        selectedBuilding.type
       } en amélioration`
     )
   }
 
   return (
-    <div className="min-h-screen bg-black p-4 text-white md:p-6">
-      {/* =====================================================
-          NOTIFICATIONS
-      ===================================================== */}
-
-      <div className="fixed right-4 top-4 z-[10000] space-y-2">
+    <div className="relative h-[100dvh] w-full overflow-hidden bg-black text-white">
+      <div className="fixed right-3 top-32 z-[10000] max-w-[calc(100vw-24px)] space-y-2 md:right-4 md:top-28">
         {notifications.map(
-          (notification, index) => (
+          (
+            notification,
+            index
+          ) => (
             <div
               key={`${notification}-${index}`}
-              className="rounded-lg border border-red-900/50 bg-zinc-950 px-4 py-2 text-white shadow-xl"
+              className="rounded-lg border border-red-900/50 bg-zinc-950 px-4 py-2 text-sm text-white shadow-xl"
             >
               {notification}
             </div>
@@ -429,80 +490,114 @@ export default function App() {
         )}
       </div>
 
-      {/* =====================================================
-          POP-UP DU BÂTIMENT
-      ===================================================== */}
-
       {selectedBuilding && (
         <BuildingUpgradeModal
-          building={selectedBuilding}
-          city={data.city}
+          building={
+            selectedBuilding
+          }
+          city={
+            data.city
+          }
           currentVillaLevel={
             currentVillaLevel
           }
           onClose={() =>
-            setSelectedBuildingId(null)
+            setSelectedBuildingId(
+              null
+            )
           }
           onUpgrade={
             handleSelectedBuildingUpgrade
           }
-          onChanged={async () => {
-            await loadGame()
-          }}
+          onChanged={
+            loadGame
+          }
           onOpenResearches={() => {
-            setSelectedBuildingId(null)
-            setIsResearchModalOpen(true)
+            setSelectedBuildingId(
+              null
+            )
+
+            setIsResearchModalOpen(
+              true
+            )
           }}
           onOpenTroops={() => {
-            setSelectedBuildingId(null)
-            setIsRecruitmentModalOpen(true)
+            setSelectedBuildingId(
+              null
+            )
+
+            setIsRecruitmentModalOpen(
+              true
+            )
           }}
         />
       )}
 
       {isResearchModalOpen && (
         <LaboratoryResearchModal
-          city={data.city}
-          buildings={data.buildings}
-          onClose={() =>
-            setIsResearchModalOpen(false)
+          city={
+            data.city
           }
-          onResearchStarted={async () => {
-            await loadGame()
-          }}
+          buildings={
+            data.buildings
+          }
+          onClose={() =>
+            setIsResearchModalOpen(
+              false
+            )
+          }
+          onResearchStarted={
+            loadGame
+          }
         />
       )}
 
       {isRecruitmentModalOpen && (
         <SecurityRecruitmentModal
-          city={data.city}
-          buildings={data.buildings}
-          onClose={() =>
-            setIsRecruitmentModalOpen(false)
+          city={
+            data.city
           }
-          onRecruitmentStarted={async () => {
-            await loadGame()
-          }}
+          buildings={
+            data.buildings
+          }
+          onClose={() =>
+            setIsRecruitmentModalOpen(
+              false
+            )
+          }
+          onRecruitmentStarted={
+            loadGame
+          }
         />
       )}
 
       {isInventoryModalOpen && (
         <InventoryModal
-          city={data.city}
-          buildings={data.buildings}
-          onClose={() =>
-            setIsInventoryModalOpen(false)
+          city={
+            data.city
           }
-          onChanged={async () => {
-            await loadGame()
-          }}
+          buildings={
+            data.buildings
+          }
+          onClose={() =>
+            setIsInventoryModalOpen(
+              false
+            )
+          }
+          onChanged={
+            loadGame
+          }
         />
       )}
 
       {isMissionsModalOpen && (
         <MissionsModal
-          city={data.city}
-          buildings={data.buildings}
+          city={
+            data.city
+          }
+          buildings={
+            data.buildings
+          }
           commanderLevel={
             commanderLevel
           }
@@ -510,317 +605,265 @@ export default function App() {
             data.commanderSkills
           }
           onClose={() =>
-            setIsMissionsModalOpen(false)
+            setIsMissionsModalOpen(
+              false
+            )
           }
-          onChanged={async () => {
-            await loadGame()
-          }}
+          onChanged={
+            loadGame
+          }
         />
       )}
 
       {isCommanderModalOpen && (
         <CommanderModal
-          player={data.player}
-          onClose={() =>
-            setIsCommanderModalOpen(false)
+          player={
+            data.player
           }
-          onChanged={async () => {
-            await loadGame()
-          }}
+          onClose={() =>
+            setIsCommanderModalOpen(
+              false
+            )
+          }
+          onChanged={
+            loadGame
+          }
         />
       )}
 
-      {/* =====================================================
-          HUD PRINCIPAL
-      ===================================================== */}
+      {mode ===
+      "city" ? (
+        <>
+          <div className="absolute inset-0">
+            <GameMap
+              cityId={
+                String(
+                  data.city.id
+                )
+              }
+              buildings={
+                data.buildings
+              }
+              onBuildingClick={
+                setSelectedBuildingId
+              }
+            />
+          </div>
 
-      <GameHud
-        playerName={playerName}
-        commanderLevel={
-          commanderLevel
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-[1000] p-2 md:p-4">
+            <div className="pointer-events-auto">
+              <GameHud
+                playerName={
+                  playerName
+                }
+                commanderLevel={
+                  commanderLevel
+                }
+                commanderXp={
+                  Number(
+                    data.player
+                      .commander_xp
+                  ) ||
+                  0
+                }
+                commanderSkillPoints={
+                  Number(
+                    data.player
+                      .commander_skill_points
+                  ) ||
+                  0
+                }
+                money={
+                  data.city.money
+                }
+                materials={
+                  data.city.materials
+                }
+                influence={
+                  data.city.influence
+                }
+                equipment={
+                  Number(
+                    data.city
+                      .equipment
+                  ) ||
+                  0
+                }
+                moneyPerHour={
+                  economy.moneyPerHour
+                }
+                materialsPerHour={
+                  economy.materialsPerHour
+                }
+                influencePerHour={
+                  economy.influencePerHour
+                }
+                equipmentPerHour={
+                  economy.equipmentPerHour
+                }
+                onCommanderClick={
+                  openCommander
+                }
+                onInventoryClick={
+                  openInventory
+                }
+                onTroopsClick={
+                  openTroops
+                }
+                onMissionsClick={
+                  openMissions
+                }
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={
+              openEditor
+            }
+            className="absolute bottom-4 left-4 z-[900] hidden rounded-xl border border-blue-500/30 bg-zinc-950/85 px-4 py-2 text-sm font-black text-blue-200 shadow-xl backdrop-blur transition hover:bg-blue-950 lg:block"
+          >
+            🛠️ Éditeur de ville
+          </button>
+
+          <MobileBottomNavigation
+            onCity={
+              openCity
+            }
+            onInventory={
+              openInventory
+            }
+            onTroops={
+              openTroops
+            }
+            onMissions={
+              openMissions
+            }
+          />
+        </>
+      ) : (
+        <div className="h-full overflow-y-auto bg-black p-4 pb-16 text-white md:p-6">
+          <div className="mx-auto max-w-7xl">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-400">
+                  Développement
+                </p>
+
+                <h1 className="mt-1 text-2xl font-black">
+                  Éditeur de ville
+                </h1>
+              </div>
+
+              <button
+                type="button"
+                onClick={
+                  openCity
+                }
+                className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 font-black text-white transition hover:bg-zinc-800"
+              >
+                ← Retour au jeu
+              </button>
+            </div>
+
+            <MapEditor
+              cityId={
+                String(
+                  data.city.id
+                )
+              }
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+type MobileBottomNavigationProps = {
+  onCity: () => void
+  onInventory: () => void
+  onTroops: () => void
+  onMissions: () => void
+}
+
+function MobileBottomNavigation({
+  onCity,
+  onInventory,
+  onTroops,
+  onMissions,
+}: MobileBottomNavigationProps) {
+  return (
+    <nav className="absolute inset-x-2 bottom-2 z-[950] grid grid-cols-4 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 p-1.5 shadow-2xl backdrop-blur-xl lg:hidden">
+      <MobileNavButton
+        icon="🏙️"
+        label="Ville"
+        onClick={
+          onCity
         }
-        commanderXp={
-          Number(
-            data.player.commander_xp
-          ) || 0
-        }
-        commanderSkillPoints={
-          Number(
-            data.player.commander_skill_points
-          ) || 0
-        }
-        onCommanderClick={() => {
-          setSelectedBuildingId(null)
-          setIsResearchModalOpen(false)
-          setIsRecruitmentModalOpen(false)
-          setIsInventoryModalOpen(false)
-          setIsMissionsModalOpen(false)
-          setIsCommanderModalOpen(true)
-        }}
-        money={data.city.money}
-        materials={
-          data.city.materials
-        }
-        influence={
-          data.city.influence
-        }
-        equipment={
-          Number(
-            data.city.equipment
-          ) || 0
-        }
-        moneyPerHour={
-          economy.moneyPerHour
-        }
-        materialsPerHour={
-          economy.materialsPerHour
-        }
-        influencePerHour={
-          economy.influencePerHour
-        }
-        equipmentPerHour={
-          economy.equipmentPerHour
-        }
-        onInventoryClick={() => {
-          setSelectedBuildingId(null)
-          setIsResearchModalOpen(false)
-          setIsRecruitmentModalOpen(false)
-          setIsMissionsModalOpen(false)
-          setIsCommanderModalOpen(false)
-          setIsInventoryModalOpen(true)
-        }}
-        onTroopsClick={() => {
-          setSelectedBuildingId(null)
-          setIsResearchModalOpen(false)
-          setIsInventoryModalOpen(false)
-          setIsMissionsModalOpen(false)
-          setIsCommanderModalOpen(false)
-          setIsRecruitmentModalOpen(true)
-        }}
-        onMissionsClick={() => {
-          setSelectedBuildingId(null)
-          setIsResearchModalOpen(false)
-          setIsRecruitmentModalOpen(false)
-          setIsInventoryModalOpen(false)
-          setIsCommanderModalOpen(false)
-          setIsMissionsModalOpen(true)
-        }}
+        active
       />
 
-      {/* =====================================================
-          NAVIGATION DE DÉVELOPPEMENT
-      ===================================================== */}
+      <MobileNavButton
+        icon="📦"
+        label="Coffre"
+        onClick={
+          onInventory
+        }
+      />
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          className={`rounded-lg px-4 py-2 font-semibold transition ${
-            mode === "city"
-              ? "bg-red-700 text-white"
-              : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-          }`}
-          onClick={() =>
-            changeMode("city")
-          }
-        >
-          Ville
-        </button>
+      <MobileNavButton
+        icon="🕴️"
+        label="Troupes"
+        onClick={
+          onTroops
+        }
+      />
 
-        <button
-          type="button"
-          className={`rounded-lg px-4 py-2 font-semibold transition ${
-            mode === "map"
-              ? "bg-red-700 text-white"
-              : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-          }`}
-          onClick={() =>
-            changeMode("map")
-          }
-        >
-          Map
-        </button>
+      <MobileNavButton
+        icon="📋"
+        label="Missions"
+        onClick={
+          onMissions
+        }
+      />
+    </nav>
+  )
+}
 
-        <button
-          type="button"
-          className={`rounded-lg px-4 py-2 font-semibold transition ${
-            mode === "editor"
-              ? "bg-red-700 text-white"
-              : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-          }`}
-          onClick={() =>
-            changeMode("editor")
-          }
-        >
-          Editor
-        </button>
-      </div>
+type MobileNavButtonProps = {
+  icon: string
+  label: string
+  onClick: () => void
+  active?: boolean
+}
 
-      {/* =====================================================
-          ANCIENNE CITY VIEW
-      ===================================================== */}
+function MobileNavButton({
+  icon,
+  label,
+  onClick,
+  active = false,
+}: MobileNavButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={
+        onClick
+      }
+      className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 transition ${
+        active
+          ? "bg-red-700/80 text-white"
+          : "text-zinc-400 hover:bg-white/5 hover:text-white"
+      }`}
+    >
+      <span className="text-base">
+        {icon}
+      </span>
 
-      {mode === "city" && (
-        <div className="mt-8">
-          <h2 className="mb-3 text-xl font-semibold">
-            🌆 Ville
-          </h2>
-
-          <CityView
-            buildings={data.buildings}
-            selectedId={
-              selectedBuildingId
-            }
-            onSelect={
-              setSelectedBuildingId
-            }
-          />
-        </div>
-      )}
-
-      {/* =====================================================
-          MAP PRINCIPALE
-      ===================================================== */}
-
-      {mode === "map" && (
-        <div className="mt-8">
-          <h2 className="mb-3 text-xl font-semibold">
-            🗺️ Map
-          </h2>
-
-          <GameMap
-            buildings={data.buildings}
-            onBuildingClick={
-              setSelectedBuildingId
-            }
-          />
-        </div>
-      )}
-
-      {/* =====================================================
-          MAP EDITOR
-      ===================================================== */}
-
-      {mode === "editor" && (
-        <div className="mt-8">
-          <h2 className="mb-3 text-xl font-semibold">
-            🛠️ Map Editor
-          </h2>
-
-          <MapEditor
-            onSave={(placement) => {
-              console.log(
-                "Placement visuel enregistré :",
-                placement
-              )
-
-              pushNotification(
-                `📍 Position de ${
-                  BUILDING_NAMES[
-                    placement.type
-                  ]
-                } enregistrée`
-              )
-            }}
-          />
-        </div>
-      )}
-
-      {/* =====================================================
-          LISTE TEMPORAIRE DES BÂTIMENTS
-      ===================================================== */}
-
-      <div className="mt-8">
-        <h2 className="mb-3 text-xl font-semibold">
-          🏗️ Bâtiments
-        </h2>
-
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {data.buildings.map(
-            (building) => {
-              const cost =
-                getUpgradeCost(
-                  building.type,
-                  building.level
-                )
-
-              return (
-                <div
-                  key={building.id}
-                  className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 p-4"
-                >
-                  <div>
-                    <span className="font-bold text-white">
-                      {BUILDING_NAMES[
-                        building.type
-                      ] || building.type}
-                    </span>
-
-                    <p className="mt-1 text-sm text-zinc-400">
-                      Niveau{" "}
-                      {building.level}
-                    </p>
-
-                    <div
-                      className={`mt-2 text-xs text-zinc-400 ${
-                        building.is_upgrading
-                          ? "opacity-40"
-                          : ""
-                      }`}
-                    >
-                      <p>
-                        💰 {cost.money}
-                      </p>
-
-                      <p>
-                        🧱{" "}
-                        {cost.materials}
-                      </p>
-
-                      {cost.influence >
-                        0 && (
-                        <p>
-                          ⭐{" "}
-                          {
-                            cost.influence
-                          }
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {building.is_upgrading ? (
-                    <div className="text-right text-sm text-amber-400">
-                      <p className="font-bold">
-                        ⏳ En cours
-                      </p>
-
-                      <p className="mt-1 font-mono text-xs">
-                        {
-                          getRemainingTime(
-                            building.upgrade_finish
-                          ).text
-                        }
-                      </p>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className="rounded-lg bg-red-700 px-4 py-2 font-semibold text-white transition hover:bg-red-600"
-                      onClick={() =>
-                        setSelectedBuildingId(
-                          building.id
-                        )
-                      }
-                    >
-                      Voir
-                    </button>
-                  )}
-                </div>
-              )
-            }
-          )}
-        </div>
-      </div>
-    </div>
+      <span className="truncate text-[8px] font-black uppercase tracking-wide">
+        {label}
+      </span>
+    </button>
   )
 }
