@@ -634,7 +634,13 @@ export default function App() {
       {mode ===
       "city" ? (
         <>
-          <div className="absolute inset-0">
+          <div
+            className="absolute inset-x-0 bottom-0"
+            style={{
+              top:
+                "calc(52px + env(safe-area-inset-top))",
+            }}
+          >
             <GameMap
               cityId={
                 String(
@@ -650,7 +656,13 @@ export default function App() {
             />
           </div>
 
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-[1000] p-2 md:p-4">
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 z-[1000] px-1 sm:px-2"
+            style={{
+              paddingTop:
+                "max(4px, env(safe-area-inset-top))",
+            }}
+          >
             <div className="pointer-events-auto">
               <GameHud
                 playerName={
