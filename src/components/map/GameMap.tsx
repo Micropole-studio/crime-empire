@@ -599,6 +599,37 @@ export default function GameMap({
     event:
       ReactPointerEvent<HTMLDivElement>
   ) {
+    const target =
+      event.target
+
+    /*
+     * Important :
+     * un clic sur un bâtiment ne doit pas être
+     * capturé par le système de déplacement de
+     * la carte. Sinon le bouton perd son clic,
+     * surtout avec une souris sur ordinateur.
+     */
+    if (
+      target instanceof Element &&
+      target.closest(
+        "[data-map-interactive]"
+      )
+    ) {
+      return
+    }
+
+    /*
+     * Avec une souris, seul le clic gauche
+     * peut déplacer la carte.
+     */
+    if (
+      event.pointerType ===
+        "mouse" &&
+      event.button !== 0
+    ) {
+      return
+    }
+
     const viewport =
       viewportRef.current
 
@@ -980,6 +1011,19 @@ export default function GameMap({
         event:
           ReactMouseEvent<HTMLDivElement>
       ) => {
+        const target =
+          event.target
+
+        if (
+          target instanceof Element &&
+          target.closest(
+            "[data-map-interactive]"
+          )
+        ) {
+          event.preventDefault()
+          return
+        }
+
         const rect =
           event.currentTarget.getBoundingClientRect()
 
@@ -1057,7 +1101,8 @@ export default function GameMap({
               <button
                 key={building.id}
                 type="button"
-                className="group absolute border-0 bg-transparent p-0 text-left"
+                data-map-interactive
+                className="group absolute cursor-pointer border-0 bg-transparent p-0 text-left"
                 style={{
                   left:
                     `${placement.x}%`,
@@ -1079,11 +1124,26 @@ export default function GameMap({
                   transformOrigin:
                     "bottom center",
                 }}
-                onClick={() =>
+                onPointerDown={(
+                  event
+                ) => {
+                  event.stopPropagation()
+                }}
+                onDoubleClick={(
+                  event
+                ) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                }}
+                onClick={(
+                  event
+                ) => {
+                  event.stopPropagation()
+
                   handleBuildingClick(
                     building
                   )
-                }
+                }}
                 disabled={
                   building.isLocked
                 }
@@ -1201,6 +1261,7 @@ function MapControlButton({
   return (
     <button
       type="button"
+      data-map-interactive
       aria-label={label}
       onPointerDown={(
         event:
