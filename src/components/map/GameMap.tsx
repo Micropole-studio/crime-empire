@@ -24,6 +24,11 @@ import {
 } from "../../data/buildingNames"
 
 import {
+  getHighestBuildingLevel,
+  getRequiredVillaLevel,
+} from "../../data/buildingRequirements"
+
+import {
   loadBuildingPlacements,
 } from "../../services/buildingPlacementStorage"
 
@@ -196,6 +201,16 @@ export default function GameMap({
         buildingsByType.values()
       )
     }, [buildings])
+
+  const villaLevel =
+    useMemo(
+      () =>
+        getHighestBuildingLevel(
+          uniqueBuildings,
+          "villa"
+        ),
+      [uniqueBuildings]
+    )
 
   const getScaleLimits =
     useCallback(() => {
@@ -970,9 +985,18 @@ export default function GameMap({
       return
     }
 
-    if (
-      building.isLocked
-    ) {
+    const requiredVillaLevel =
+      getRequiredVillaLevel(
+        building.type
+      )
+
+    const isLocked =
+      building.type !==
+        "villa" &&
+      villaLevel <
+        requiredVillaLevel
+
+    if (isLocked) {
       return
     }
 
@@ -1097,12 +1121,47 @@ export default function GameMap({
               return null
             }
 
+            const currentLevel =
+              Math.max(
+                0,
+                Number(
+                  building.level
+                ) || 0
+              )
+
+            const requiredVillaLevel =
+              getRequiredVillaLevel(
+                building.type
+              )
+
+            const isLocked =
+              building.type !==
+                "villa" &&
+              villaLevel <
+                requiredVillaLevel
+
+            const isConstructed =
+              currentLevel >= 1
+
+            const isAvailableToBuild =
+              !isConstructed &&
+              !isLocked
+
+            const buildingName =
+              BUILDING_NAMES[
+                building.type
+              ]
+
             return (
               <button
                 key={building.id}
                 type="button"
                 data-map-interactive
-                className="group absolute cursor-pointer border-0 bg-transparent p-0 text-left"
+                className={`group absolute border-0 bg-transparent p-0 text-left ${
+                  isLocked
+                    ? "cursor-not-allowed"
+                    : "cursor-pointer"
+                }`}
                 style={{
                   left:
                     `${placement.x}%`,
@@ -1145,24 +1204,30 @@ export default function GameMap({
                   )
                 }}
                 disabled={
-                  building.isLocked
+                  isLocked
                 }
-                aria-label={`Ouvrir ${
-                  BUILDING_NAMES[
-                    building.type
-                  ]
-                }`}
+                aria-label={
+                  isConstructed
+                    ? `Ouvrir ${buildingName}`
+                    : isLocked
+                      ? `${buildingName} verrouillé — Villa niveau ${requiredVillaLevel} requise`
+                      : `Construire ${buildingName}`
+                }
               >
                 <div className="pointer-events-none absolute bottom-[-2%] left-1/2 h-[12%] w-[70%] -translate-x-1/2 rounded-full bg-black/50 blur-md" />
 
                 <img
                   src={`/buildings/${building.type}.png`}
                   alt={
-                    BUILDING_NAMES[
-                      building.type
-                    ]
+                    buildingName
                   }
-                  className={`pointer-events-none relative z-10 block w-full select-none transition duration-200 group-hover:brightness-110 ${
+                  className={`pointer-events-none relative z-10 block w-full select-none transition duration-200 ${
+                    isConstructed
+                      ? "group-hover:brightness-110"
+                      : isLocked
+                        ? "opacity-15 grayscale blur-[0.5px]"
+                        : "opacity-35 grayscale group-hover:opacity-55 group-hover:drop-shadow-[0_0_18px_rgba(34,197,94,0.8)]"
+                  } ${
                     building.is_upgrading
                       ? "brightness-75 saturate-75"
                       : ""
@@ -1170,17 +1235,58 @@ export default function GameMap({
                   draggable={false}
                 />
 
-                <div className="pointer-events-none absolute bottom-0 left-1/2 z-30 flex h-6 min-w-6 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border-2 border-yellow-400 bg-zinc-950 px-1 text-xs font-black text-yellow-300 shadow-lg">
-                  {building.level}
+                {isConstructed ? (
+                  <div className="pointer-events-none absolute bottom-0 left-1/2 z-30 flex h-6 min-w-6 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border-2 border-yellow-400 bg-zinc-950 px-1 text-xs font-black text-yellow-300 shadow-lg">
+                    {currentLevel}
+                  </div>
+                ) : (
+                  <div
+                    className={`pointer-events-none absolute bottom-0 left-1/2 z-30 flex h-7 min-w-7 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border-2 bg-zinc-950 px-1 text-xs font-black shadow-lg ${
+                      isLocked
+                        ? "border-zinc-600 text-zinc-400"
+                        : "border-green-400 text-green-300 shadow-[0_0_12px_rgba(34,197,94,0.5)]"
+                    }`}
+                  >
+                    {isLocked
+                      ? "🔒"
+                      : "🏗️"}
+                  </div>
+                )}
+
+                <div
+                  className={`pointer-events-none absolute left-1/2 top-full z-20 mt-5 -translate-x-1/2 whitespace-nowrap rounded-lg border px-2 py-1 text-[10px] font-bold shadow-lg backdrop-blur-sm sm:text-xs ${
+                    isConstructed
+                      ? "border-white/10 bg-black/80 text-white"
+                      : isLocked
+                        ? "border-zinc-700/60 bg-black/80 text-zinc-500"
+                        : "border-green-400/30 bg-green-950/85 text-green-200"
+                  }`}
+                >
+                  {isConstructed
+                    ? buildingName
+                    : isLocked
+                      ? `${buildingName} · Villa ${requiredVillaLevel}`
+                      : `Construire ${buildingName}`}
                 </div>
 
-                <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-5 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-black/80 px-2 py-1 text-[10px] font-bold text-white shadow-lg backdrop-blur-sm sm:text-xs">
-                  {
-                    BUILDING_NAMES[
-                      building.type
-                    ]
-                  }
-                </div>
+                {isAvailableToBuild &&
+                  !building.is_upgrading && (
+                  <>
+                    <div className="pointer-events-none absolute inset-0 z-20 animate-pulse rounded-xl border-2 border-dashed border-green-400/60 bg-green-500/5 shadow-[0_0_20px_rgba(34,197,94,0.28)]" />
+
+                    <div className="pointer-events-none absolute bottom-8 left-1/2 z-40 -translate-x-1/2">
+                      <div className="flex items-center gap-1.5 rounded-full border border-green-300/50 bg-zinc-950/90 px-2.5 py-1 shadow-[0_0_14px_rgba(34,197,94,0.35)] backdrop-blur-sm">
+                        <span className="text-xs">
+                          🏗️
+                        </span>
+
+                        <span className="whitespace-nowrap text-[9px] font-black uppercase tracking-[0.12em] text-green-200">
+                          Disponible
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {building.is_upgrading && (
                   <>
@@ -1193,16 +1299,26 @@ export default function GameMap({
                         </span>
 
                         <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-[0.15em] text-amber-200">
-                          En travaux
+                          {isConstructed
+                            ? "En travaux"
+                            : "Construction"}
                         </span>
                       </div>
                     </div>
                   </>
                 )}
 
-                {building.isLocked && (
-                  <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-xl bg-black/70 text-4xl grayscale">
-                    🔒
+                {isLocked && (
+                  <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-xl bg-black/40">
+                    <div className="rounded-full border border-zinc-600/70 bg-zinc-950/90 px-3 py-1.5 text-center shadow-xl">
+                      <p className="text-lg">
+                        🔒
+                      </p>
+
+                      <p className="mt-0.5 text-[8px] font-black uppercase tracking-wider text-zinc-400">
+                        Villa {requiredVillaLevel}
+                      </p>
+                    </div>
                   </div>
                 )}
               </button>

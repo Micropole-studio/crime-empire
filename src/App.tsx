@@ -431,11 +431,11 @@ export default function App() {
 
   const currentVillaLevel =
     Math.max(
-      1,
+      0,
       Number(
         villa?.level
       ) ||
-        1
+        0
     )
 
   const selectedBuilding =
@@ -457,7 +457,8 @@ export default function App() {
     await upgradeBuilding(
       selectedBuilding,
       data.city,
-      currentVillaLevel
+      currentVillaLevel,
+      data.buildings
     )
 
     await loadGame()
@@ -468,7 +469,7 @@ export default function App() {
           selectedBuilding.type
         ] ||
         selectedBuilding.type
-      } en amélioration`
+      } : construction lancée`
     )
   }
 
@@ -494,6 +495,9 @@ export default function App() {
         <BuildingUpgradeModal
           building={
             selectedBuilding
+          }
+          buildings={
+            data.buildings
           }
           city={
             data.city

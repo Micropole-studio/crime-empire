@@ -1,6 +1,7 @@
 import { supabase } from "./supabase"
 
 import type {
+  Building,
   BuildingType,
 } from "../types/building"
 
@@ -14,9 +15,16 @@ import {
   getRequiredVillaLevel,
 } from "../data/buildingUnlocks"
 
-// =====================================================
-// COÛT DU PROCHAIN NIVEAU
-// =====================================================
+import {
+  getVillaRequirementStates,
+} from "../data/buildingRequirements"
+
+type CityResources = {
+  id: string
+  money: number
+  materials: number
+  influence: number
+}
 
 export function getUpgradeCost(
   type: BuildingType,
@@ -37,13 +45,6 @@ export function getUpgradeCost(
   )
 }
 
-// =====================================================
-// TEMPS DE CONSTRUCTION RÉEL
-//
-// Le temps de base est réduit grâce
-// au niveau actuel de la Villa.
-// =====================================================
-
 export function getConstructionTime(
   type: BuildingType,
   currentLevel: number,
@@ -59,20 +60,31 @@ export function getConstructionTime(
     return 0
   }
 
-  const safeVillaLevel = Math.max(
-    1,
-    Number(villaLevel) || 1
-  )
+  /*
+   * La Villa niveau 1 avait historiquement
+   * un temps de 0 seconde. On conserve une
+   * construction très rapide afin que le
+   * passage niveau 0 -> 1 utilise le même
+   * système fiable que les autres niveaux.
+   */
+  const baseSeconds =
+    nextLevel.level === 1 &&
+    type === "villa" &&
+    nextLevel.constructionTimeSeconds <= 0
+      ? 5
+      : nextLevel.constructionTimeSeconds
+
+  const speedVillaLevel =
+    Math.max(
+      1,
+      Number(villaLevel) || 0
+    )
 
   return applyVillaConstructionSpeed(
-    nextLevel.constructionTimeSeconds,
-    safeVillaLevel
+    baseSeconds,
+    speedVillaLevel
   )
 }
-
-// =====================================================
-// INFORMATIONS DU PROCHAIN NIVEAU
-// =====================================================
 
 export function getUpgradeDetails(
   type: BuildingType,
@@ -84,25 +96,19 @@ export function getUpgradeDetails(
   )
 }
 
-// =====================================================
-// AMÉLIORATION D'UN BÂTIMENT
-// =====================================================
-
 export async function upgradeBuilding(
-  building: any,
-  city: any,
-  villaLevel: number
+  building: Building,
+  city: CityResources,
+  villaLevel: number,
+  buildings: Building[] = []
 ) {
-  const safeVillaLevel = Math.max(
-    1,
-    Number(villaLevel) || 1
-  )
-
-  console.log("UPGRADE START:", {
-    building,
-    city,
-    villaLevel: safeVillaLevel,
-  })
+  const safeVillaLevel =
+    Math.max(
+      0,
+      Math.floor(
+        Number(villaLevel) || 0
+      )
+    )
 
   if (!city?.id) {
     throw new Error(
@@ -117,15 +123,20 @@ export async function upgradeBuilding(
   }
 
   const buildingType =
-    building.type as BuildingType
+    building.type
 
-  const currentLevel = Number(
-    building.level
-  )
+  const currentLevel =
+    Math.floor(
+      Number(
+        building.level
+      )
+    )
 
   if (
-    !Number.isFinite(currentLevel) ||
-    currentLevel < 1
+    !Number.isFinite(
+      currentLevel
+    ) ||
+    currentLevel < 0
   ) {
     throw new Error(
       "Niveau du bâtiment invalide"
@@ -137,7 +148,10 @@ export async function upgradeBuilding(
       buildingType
     )
 
-  if (currentLevel >= maxLevel) {
+  if (
+    currentLevel >=
+    maxLevel
+  ) {
     throw new Error(
       "Ce bâtiment a atteint son niveau maximum"
     )
@@ -155,24 +169,6 @@ export async function upgradeBuilding(
     )
   }
 
-  // =====================================================
-  // NIVEAU MINIMAL DE VILLA
-  //
-  // Villa niveau 2 :
-  // → Planque
-  //
-  // Villa niveau 3 :
-  // → Garage
-  // → Sécurité
-  //
-  // Villa niveau 4 :
-  // → Syndicat
-  //
-  // Villa niveau 5 :
-  // → Laboratoire
-  // → Usine
-  // =====================================================
-
   const requiredVillaLevel =
     getRequiredVillaLevel(
       buildingType
@@ -184,23 +180,9 @@ export async function upgradeBuilding(
       requiredVillaLevel
   ) {
     throw new Error(
-      `Villa niveau ${requiredVillaLevel} nécessaire pour débloquer ce bâtiment`
+      `Villa niveau ${requiredVillaLevel} nécessaire pour construire ce bâtiment`
     )
   }
-
-  // =====================================================
-  // PLAFOND IMPOSÉ PAR LA VILLA
-  //
-  // Un bâtiment ne peut jamais
-  // dépasser le niveau actuel de la Villa.
-  //
-  // Exemple :
-  // Villa niveau 4
-  // → les autres bâtiments peuvent
-  // atteindre le niveau 4 maximum.
-  //
-  // La Villa elle-même n'est pas concernée.
-  // =====================================================
 
   if (
     buildingType !== "villa" &&
@@ -212,9 +194,72 @@ export async function upgradeBuilding(
     )
   }
 
-  // =====================================================
-  // CONSTRUCTION UNIQUE
-  // =====================================================
+  if (
+    buildingType === "villa"
+  ) {
+    let progressionBuildings =
+      buildings
+
+    if (
+      progressionBuildings.length ===
+      0
+    ) {
+      const {
+        data: buildingData,
+        error: buildingReadError,
+      } = await supabase
+        .from("buildings")
+        .select(
+          `
+            id,
+            type,
+            level,
+            is_upgrading,
+            target_level,
+            upgrade_finish
+          `
+        )
+        .eq(
+          "city_id",
+          city.id
+        )
+
+      if (buildingReadError) {
+        throw buildingReadError
+      }
+
+      progressionBuildings =
+        (
+          buildingData ?? []
+        ) as Building[]
+    }
+
+    const missingRequirements =
+      getVillaRequirementStates(
+        progressionBuildings,
+        nextLevel.level
+      ).filter(
+        (requirement) =>
+          !requirement.completed
+      )
+
+    if (
+      missingRequirements.length >
+      0
+    ) {
+      const missingText =
+        missingRequirements
+          .map(
+            (requirement) =>
+              `${requirement.name} niveau ${requirement.level} (actuel : ${requirement.currentLevel})`
+          )
+          .join(", ")
+
+      throw new Error(
+        `Prérequis manquants pour la Villa niveau ${nextLevel.level} : ${missingText}`
+      )
+    }
+  }
 
   const {
     data: activeConstruction,
@@ -222,55 +267,59 @@ export async function upgradeBuilding(
   } = await supabase
     .from("buildings")
     .select("id")
-    .eq("city_id", city.id)
-    .eq("is_upgrading", true)
+    .eq(
+      "city_id",
+      city.id
+    )
+    .eq(
+      "is_upgrading",
+      true
+    )
 
   if (activeError) {
     throw activeError
   }
 
   if (
-    (activeConstruction?.length ?? 0) >
-    0
+    (
+      activeConstruction
+        ?.length ?? 0
+    ) > 0
   ) {
     throw new Error(
       "Une construction est déjà en cours dans votre ville"
     )
   }
 
-  if (building.is_upgrading) {
+  if (
+    building.is_upgrading
+  ) {
     throw new Error(
       "Construction déjà en cours"
     )
   }
 
-  const cost = nextLevel.cost
-
-  console.log(
-    "NEXT LEVEL:",
-    nextLevel
-  )
-
-  console.log(
-    "COST:",
-    cost
-  )
-
-  // =====================================================
-  // VÉRIFICATION DES RESSOURCES
-  // =====================================================
+  const cost =
+    nextLevel.cost
 
   const currentMoney =
-    Number(city.money) || 0
+    Number(
+      city.money
+    ) || 0
 
   const currentMaterials =
-    Number(city.materials) || 0
+    Number(
+      city.materials
+    ) || 0
 
   const currentInfluence =
-    Number(city.influence) || 0
+    Number(
+      city.influence
+    ) || 0
 
   if (
-    currentMoney < cost.money
+    currentMoney <
+    cost.money
   ) {
     throw new Error(
       "Pas assez d'argent"
@@ -295,17 +344,6 @@ export async function upgradeBuilding(
     )
   }
 
-  // =====================================================
-  // TEMPS DE CONSTRUCTION
-  //
-  // Le temps réel tient compte du
-  // bonus de vitesse actuel de la Villa.
-  //
-  // Exemple :
-  // Villa niveau 3
-  // → +6 % de vitesse de construction.
-  // =====================================================
-
   const constructionTime =
     getConstructionTime(
       buildingType,
@@ -321,74 +359,70 @@ export async function upgradeBuilding(
     )
   }
 
-  const finishDate = new Date(
-    Date.now() +
-      constructionTime * 1000
-  ).toISOString()
+  const finishDate =
+    new Date(
+      Date.now() +
+        constructionTime *
+          1000
+    ).toISOString()
 
-  console.log(
-    "CONSTRUCTION TIME:",
-    constructionTime,
-    "secondes"
-  )
-
-  console.log(
-    "UPGRADE FINISH:",
-    finishDate
-  )
-
-  // =====================================================
-  // MISE À JOUR DU BÂTIMENT
-  // =====================================================
-
+  /*
+   * Le trigger Supabase fourni dans le pack
+   * revérifie les déblocages, le plafond de
+   * la Villa et les prérequis de la Villa.
+   */
   const {
     data: updatedBuilding,
     error: buildingError,
   } = await supabase
     .from("buildings")
     .update({
-      is_upgrading: true,
+      is_upgrading:
+        true,
+
       target_level:
         nextLevel.level,
+
       upgrade_finish:
         finishDate,
     })
-    .eq("id", building.id)
+    .eq(
+      "id",
+      building.id
+    )
     .eq(
       "is_upgrading",
       false
     )
-    .select("id")
+    .eq(
+      "level",
+      currentLevel
+    )
+    .select(
+      `
+        id,
+        type,
+        level,
+        is_upgrading,
+        target_level,
+        upgrade_finish
+      `
+    )
     .maybeSingle()
 
   if (buildingError) {
-    console.error(
-      "BUILDING ERROR:",
-      buildingError
-    )
-
     throw buildingError
   }
 
-  /*
-   * La condition is_upgrading = false
-   * sert de verrou.
-   *
-   * Si aucune ligne n'a été modifiée,
-   * les ressources ne sont pas retirées.
-   */
   if (!updatedBuilding) {
     throw new Error(
       "Ce bâtiment vient déjà d'être mis en construction"
     )
   }
 
-  // =====================================================
-  // RETRAIT DES RESSOURCES
-  // =====================================================
-
   const newMoney =
-    currentMoney - cost.money
+    currentMoney -
+    cost.money
 
   const newMaterials =
     currentMaterials -
@@ -399,33 +433,53 @@ export async function upgradeBuilding(
     cost.influence
 
   const {
-    data: cityData,
     error: cityError,
   } = await supabase
     .from("cities")
     .update({
-      money: newMoney,
+      money:
+        newMoney,
+
       materials:
         newMaterials,
+
       influence:
         newInfluence,
     })
-    .eq("id", city.id)
-    .select()
+    .eq(
+      "id",
+      city.id
+    )
 
   if (cityError) {
-    console.error(
-      "CITY ERROR:",
-      cityError
-    )
+    /*
+     * Compensation de sécurité :
+     * si le retrait des ressources échoue,
+     * la construction est annulée.
+     */
+    await supabase
+      .from("buildings")
+      .update({
+        is_upgrading:
+          false,
+
+        target_level:
+          null,
+
+        upgrade_finish:
+          null,
+      })
+      .eq(
+        "id",
+        building.id
+      )
+      .eq(
+        "target_level",
+        nextLevel.level
+      )
 
     throw cityError
   }
-
-  console.log(
-    "CITY UPDATED:",
-    cityData
-  )
 
   return true
 }

@@ -10,25 +10,26 @@ export type BuildingType =
 export type Building = {
   id: string
   type: BuildingType
+
+  /*
+   * Niveau 0 :
+   * le terrain existe dans la base,
+   * mais le bâtiment n'est pas construit.
+   */
   level: number
 
   /*
-   * État d'accès au bâtiment.
+   * Conservé pour rester compatible avec
+   * les anciennes données. La carte recalcule
+   * désormais le verrouillage depuis le niveau
+   * réel de la Villa.
    */
   isLocked: boolean
 
-  /*
-   * Colonnes utilisées dans Supabase.
-   */
   is_upgrading: boolean
   target_level: number | null
   upgrade_finish: string | null
 
-  /*
-   * Conservées temporairement pour éviter de casser
-   * d'anciens composants qui utiliseraient encore x et y.
-   * La carte utilise désormais BuildingPlacement.
-   */
   x?: number
   y?: number
 }

@@ -48,6 +48,11 @@ import {
 } from "../data/buildingUnlocks"
 
 import {
+  getVillaRequirementStates,
+  getVillaUnlocksForTargetLevel,
+} from "../data/buildingRequirements"
+
+import {
   getInventoryItemDefinition,
   getSpeedupScope,
   getSpeedupSeconds,
@@ -73,6 +78,7 @@ type CityResources = {
 
 type Props = {
   building: Building
+  buildings: Building[]
   city: CityResources
 
   /*
@@ -193,6 +199,7 @@ function getProductionEffectLines(
 
 export default function BuildingUpgradeModal({
   building,
+  buildings,
   city,
   currentVillaLevel,
   onClose,
@@ -256,8 +263,12 @@ export default function BuildingUpgradeModal({
   >([])
 
   const safeVillaLevel = Math.max(
-    1,
-    Number(currentVillaLevel) || 1
+    0,
+    Math.floor(
+      Number(
+        currentVillaLevel
+      ) || 0
+    )
   )
 
   const cost = useMemo(
@@ -304,6 +315,51 @@ export default function BuildingUpgradeModal({
   const nextLevel =
     building.target_level ??
     building.level + 1
+
+  const isConstruction =
+    Number(
+      building.level
+    ) < 1
+
+  const villaRequirementStates =
+    useMemo(
+      () =>
+        building.type ===
+        "villa"
+          ? getVillaRequirementStates(
+              buildings,
+              nextLevel
+            )
+          : [],
+      [
+        building.type,
+        buildings,
+        nextLevel,
+      ]
+    )
+
+  const missingVillaRequirements =
+    villaRequirementStates.filter(
+      (requirement) =>
+        !requirement.completed
+    )
+
+  const isBlockedByVillaRequirements =
+    building.type ===
+      "villa" &&
+    missingVillaRequirements.length >
+      0
+
+  const displayedUnlocks =
+    building.type ===
+      "villa"
+      ? getVillaUnlocksForTargetLevel(
+          nextLevel
+        )
+      : (
+          upgradeDetails?.unlocks ??
+          []
+        )
 
   const commanderXpReward =
     getBuildingUpgradeXp(
@@ -538,6 +594,10 @@ const isAboveVillaLimit =
 const isBlockedByVilla =
   isBelowUnlockLevel ||
   isAboveVillaLimit
+
+const isUpgradeBlocked =
+  isBlockedByVilla ||
+  isBlockedByVillaRequirements
 
 /*
  * Niveau de Villa à afficher dans
@@ -834,7 +894,7 @@ const requiredVillaLevelForUpgrade =
     if (
       activeConstruction ||
       !hasEnoughResources ||
-      isBlockedByVilla ||
+      isUpgradeBlocked ||
       isSubmitting
     ) {
       return
@@ -855,7 +915,9 @@ const requiredVillaLevelForUpgrade =
       const message =
         error instanceof Error
           ? error.message
-          : "Impossible de lancer l'amélioration"
+          : isConstruction
+            ? "Impossible de lancer la construction"
+            : "Impossible de lancer l'amélioration"
 
       setErrorMessage(message)
     } finally {
@@ -911,7 +973,9 @@ const requiredVillaLevelForUpgrade =
                 </h2>
 
                 <p className="mt-1 text-sm text-zinc-400">
-                  Niveau {building.level}
+                  {isConstruction
+                    ? "Non construit"
+                    : `Niveau ${building.level}`}
                   {" → "}
                   niveau {nextLevel}
                 </p>
@@ -937,7 +1001,9 @@ const requiredVillaLevelForUpgrade =
               </div>
 
               <h3 className="mt-2 text-lg font-black text-orange-300">
-                Amélioration en cours
+                {isConstruction
+                  ? "Construction en cours"
+                  : "Amélioration en cours"}
               </h3>
 
               <p className="mt-1 text-sm text-zinc-400">
@@ -1139,7 +1205,11 @@ const requiredVillaLevelForUpgrade =
                   0) && (
                 <section className="grid gap-3 sm:grid-cols-2">
                   <EffectSummaryCard
-                    title={`Effets actifs — niveau ${building.level}`}
+                    title={
+                      isConstruction
+                        ? "Avant construction"
+                        : `Effets actifs — niveau ${building.level}`
+                    }
                     lines={
                       currentEffectLines
                     }
@@ -1147,7 +1217,11 @@ const requiredVillaLevelForUpgrade =
                   />
 
                   <EffectSummaryCard
-                    title={`Après amélioration — niveau ${nextLevel}`}
+                    title={
+                      isConstruction
+                        ? `Après construction — niveau ${nextLevel}`
+                        : `Après amélioration — niveau ${nextLevel}`
+                    }
                     lines={
                       nextEffectLines
                     }
@@ -1255,7 +1329,9 @@ const requiredVillaLevelForUpgrade =
               {/* COÛT */}
               <section>
                 <h3 className="mb-3 text-sm font-black uppercase tracking-wider text-zinc-300">
-                  Coût de l’amélioration
+                  {isConstruction
+                    ? "Coût de la construction"
+                    : "Coût de l’amélioration"}
                 </h3>
 
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -1287,7 +1363,9 @@ const requiredVillaLevelForUpgrade =
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <h3 className="font-bold text-white">
-                      Temps de construction
+                      {isConstruction
+                        ? "Temps de construction"
+                        : "Temps d’amélioration"}
                     </h3>
 
                     <div className="mt-1 text-sm text-zinc-400">
@@ -1348,7 +1426,9 @@ const requiredVillaLevelForUpgrade =
               {/* BONUS ET DÉBLOCAGES */}
               <section className="rounded-xl border border-purple-500/20 bg-purple-500/10 p-4">
                 <h3 className="font-bold text-purple-200">
-                  Résultats du niveau{" "}
+                  {isConstruction
+                    ? "Résultats de la construction"
+                    : "Résultats du niveau"}{" "}
                   {nextLevel}
                 </h3>
 
@@ -1386,8 +1466,7 @@ const requiredVillaLevelForUpgrade =
                     "hideout" &&
                   building.type !==
                     "workshop" &&
-                  upgradeDetails?.unlocks &&
-                upgradeDetails.unlocks.length >
+                  displayedUnlocks.length >
                   0 ? (
                   <div className="mt-4">
                     <p className="text-xs font-bold uppercase tracking-wide text-purple-300/70">
@@ -1395,7 +1474,7 @@ const requiredVillaLevelForUpgrade =
                     </p>
 
                     <ul className="mt-2 space-y-1 text-sm font-semibold text-purple-100">
-                      {upgradeDetails.unlocks.map(
+                      {displayedUnlocks.map(
                         (unlock) => (
                           <li
                             key={unlock}
@@ -1425,6 +1504,77 @@ const requiredVillaLevelForUpgrade =
                   </p>
                 )}
               </section>
+
+              {/* PRÉREQUIS DE LA VILLA */}
+              {building.type ===
+                  "villa" &&
+                nextLevel > 1 && (
+                  <section className="rounded-xl border border-amber-500/25 bg-amber-500/[0.08] p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-black text-amber-200">
+                          Conditions pour la Villa niveau{" "}
+                          {nextLevel}
+                        </h3>
+
+                        <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                          La Villa ne peut plus être
+                          améliorée seule. Les bâtiments
+                          utiles à la prochaine étape de
+                          l'empire doivent être prêts.
+                        </p>
+                      </div>
+
+                      <span
+                        className={`rounded-full border px-3 py-1 text-xs font-black ${
+                          isBlockedByVillaRequirements
+                            ? "border-red-400/25 bg-red-500/10 text-red-200"
+                            : "border-green-400/25 bg-green-500/10 text-green-200"
+                        }`}
+                      >
+                        {isBlockedByVillaRequirements
+                          ? `${missingVillaRequirements.length} condition(s) manquante(s)`
+                          : "Toutes les conditions sont remplies"}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      {villaRequirementStates.map(
+                        (requirement) => (
+                          <div
+                            key={`${requirement.building}-${requirement.level}`}
+                            className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${
+                              requirement.completed
+                                ? "border-green-500/20 bg-green-500/[0.07]"
+                                : "border-red-500/20 bg-red-500/[0.07]"
+                            }`}
+                          >
+                            <span
+                              className={
+                                requirement.completed
+                                  ? "font-semibold text-green-200"
+                                  : "font-semibold text-red-200"
+                              }
+                            >
+                              {requirement.completed
+                                ? "✓"
+                                : "✗"}{" "}
+                              {requirement.name} niveau{" "}
+                              {requirement.level}
+                            </span>
+
+                            <span className="text-xs text-zinc-500">
+                              Actuel :{" "}
+                              {requirement.currentLevel > 0
+                                ? `niveau ${requirement.currentLevel}`
+                                : "non construit"}
+                            </span>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </section>
+                )}
 
               {/* PLAFOND DE LA VILLA */}
              {isBlockedByVilla && (
@@ -1480,8 +1630,9 @@ const requiredVillaLevelForUpgrade =
           )}
 
           {/* GESTION SPÉCIFIQUE DU BÂTIMENT */}
-          {(building.type === "laboratory" ||
-            building.type === "wall") && (
+          {building.level >= 1 &&
+            (building.type === "laboratory" ||
+              building.type === "wall") && (
             <div className="grid gap-3 sm:grid-cols-2">
               {building.type === "laboratory" &&
                 onOpenResearches && (
@@ -1524,16 +1675,20 @@ const requiredVillaLevelForUpgrade =
                 onClick={handleUpgrade}
                 disabled={
                   !hasEnoughResources ||
-                  isBlockedByVilla ||
+                  isUpgradeBlocked ||
                   isSubmitting
                 }
                 className="rounded-lg bg-green-600 px-5 py-3 font-black text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
               >
                 {isSubmitting
                   ? "Lancement..."
-                  : isBlockedByVilla
-                    ? `Villa niveau ${nextLevel} requise`
-                    : `Améliorer vers le niveau ${nextLevel}`}
+                  : isBlockedByVillaRequirements
+                    ? "Prérequis manquants"
+                    : isBlockedByVilla
+                      ? `Villa niveau ${requiredVillaLevelForUpgrade} requise`
+                      : isConstruction
+                        ? `Construire ${BUILDING_NAMES[building.type]}`
+                        : `Améliorer vers le niveau ${nextLevel}`}
               </button>
             )}
           </div>
