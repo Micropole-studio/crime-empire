@@ -38,8 +38,17 @@ import {
 } from "../../services/buildingPlacementService"
 
 import {
-  WORLD_MAP_HELICOPTER_PLACEMENT,
+  loadWorldMapAccessPlacement,
 } from "../../data/worldMapAccess"
+
+import type {
+  WorldMapAccessPlacement,
+} from "../../data/worldMapAccess"
+
+import {
+  WORLD_MAP_ACCESS_UPDATED_EVENT,
+  loadSharedWorldMapAccess,
+} from "../../services/worldMapAccessService"
 
 type Props = {
   cityId: string
@@ -168,6 +177,15 @@ export default function GameMap({
   ] = useState<BuildingPlacements>(
     () =>
       loadBuildingPlacements()
+  )
+
+
+  const [
+    helicopterPlacement,
+    setHelicopterPlacement,
+  ] = useState<WorldMapAccessPlacement>(
+    () =>
+      loadWorldMapAccessPlacement()
   )
 
   const [
@@ -583,6 +601,57 @@ export default function GameMap({
       window.removeEventListener(
         BUILDING_PLACEMENTS_UPDATED_EVENT,
         handlePlacementsUpdated
+      )
+    }
+  }, [cityId])
+
+  useEffect(() => {
+    let cancelled =
+      false
+
+    async function loadHelicopterPlacement() {
+      const result =
+        await loadSharedWorldMapAccess(
+          cityId
+        )
+
+      if (!cancelled) {
+        setHelicopterPlacement(
+          result.placement
+        )
+      }
+    }
+
+    loadHelicopterPlacement()
+
+    function handleHelicopterUpdated(
+      event: Event
+    ) {
+      const customEvent =
+        event as CustomEvent<
+          WorldMapAccessPlacement
+        >
+
+      if (
+        customEvent.detail
+      ) {
+        setHelicopterPlacement(
+          customEvent.detail
+        )
+      }
+    }
+
+    window.addEventListener(
+      WORLD_MAP_ACCESS_UPDATED_EVENT,
+      handleHelicopterUpdated
+    )
+
+    return () => {
+      cancelled = true
+
+      window.removeEventListener(
+        WORLD_MAP_ACCESS_UPDATED_EVENT,
+        handleHelicopterUpdated
       )
     }
   }, [cityId])
@@ -1137,20 +1206,20 @@ export default function GameMap({
           className="group absolute cursor-pointer border-0 bg-transparent p-0"
           style={{
             left:
-              `${WORLD_MAP_HELICOPTER_PLACEMENT.x}%`,
+              `${helicopterPlacement.x}%`,
 
             top:
-              `${WORLD_MAP_HELICOPTER_PLACEMENT.y}%`,
+              `${helicopterPlacement.y}%`,
 
             width:
-              `${WORLD_MAP_HELICOPTER_PLACEMENT.width}%`,
+              `${helicopterPlacement.width}%`,
 
             zIndex:
-              WORLD_MAP_HELICOPTER_PLACEMENT.zIndex,
+              helicopterPlacement.zIndex,
 
             transform: `
               translate(-50%, -50%)
-              rotate(${WORLD_MAP_HELICOPTER_PLACEMENT.rotation}deg)
+              rotate(${helicopterPlacement.rotation}deg)
             `,
 
             transformOrigin:

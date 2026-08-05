@@ -15,6 +15,10 @@ import type {
   BuildingPlacements,
 } from "../../types/buildingPlacement"
 
+import type {
+  WorldMapAccessPlacement,
+} from "../../data/worldMapAccess"
+
 import {
   BUILDING_NAMES,
 } from "../../data/buildingNames"
@@ -29,6 +33,17 @@ import {
   loadSharedBuildingPlacements,
   saveSharedBuildingPlacements,
 } from "../../services/buildingPlacementService"
+
+import {
+  loadWorldMapAccessPlacement,
+  resetWorldMapAccessPlacement,
+  saveWorldMapAccessPlacement,
+} from "../../data/worldMapAccess"
+
+import {
+  loadSharedWorldMapAccess,
+  saveSharedWorldMapAccess,
+} from "../../services/worldMapAccessService"
 
 type Props = {
   cityId: string
@@ -45,15 +60,52 @@ type SyncStatus =
   | "saved"
   | "error"
 
-const BUILDING_TYPES: BuildingType[] = [
-  "villa",
-  "workshop",
-  "hideout",
-  "wall",
-  "laboratory",
-  "syndicate",
-  "factory",
-]
+type EditorObjectType =
+  | BuildingType
+  | "helicopter"
+
+type EditablePlacement = {
+  x: number
+  y: number
+  width: number
+  rotation: number
+  zIndex: number
+}
+
+const BUILDING_TYPES:
+  BuildingType[] = [
+    "villa",
+    "workshop",
+    "hideout",
+    "wall",
+    "laboratory",
+    "syndicate",
+    "factory",
+  ]
+
+const EDITOR_OBJECTS:
+  EditorObjectType[] = [
+    ...BUILDING_TYPES,
+    "helicopter",
+  ]
+
+function isBuildingType(
+  value: EditorObjectType
+): value is BuildingType {
+  return value !==
+    "helicopter"
+}
+
+function getObjectName(
+  type: EditorObjectType
+) {
+  return type ===
+    "helicopter"
+    ? "Hélicoptère"
+    : BUILDING_NAMES[
+        type
+      ]
+}
 
 export default function MapEditor({
   cityId,
@@ -62,13 +114,18 @@ export default function MapEditor({
   const [
     selectedType,
     setSelectedType,
-  ] = useState<BuildingType>(
-    "villa"
-  )
+  ] = useState<
+    EditorObjectType
+  >("villa")
 
   const initialPlacementsRef =
     useRef<BuildingPlacements>(
       loadBuildingPlacements()
+    )
+
+  const initialHelicopterRef =
+    useRef<WorldMapAccessPlacement>(
+      loadWorldMapAccessPlacement()
     )
 
   const [
@@ -76,6 +133,13 @@ export default function MapEditor({
     setPlacements,
   ] = useState<BuildingPlacements>(
     initialPlacementsRef.current
+  )
+
+  const [
+    helicopterPlacement,
+    setHelicopterPlacement,
+  ] = useState<WorldMapAccessPlacement>(
+    initialHelicopterRef.current
   )
 
   const [
@@ -90,8 +154,14 @@ export default function MapEditor({
       null
     )
 
-  const selectedPlacement =
-    placements[selectedType]
+  const selectedPlacement:
+    EditablePlacement =
+    selectedType ===
+      "helicopter"
+      ? helicopterPlacement
+      : placements[
+          selectedType
+        ]
 
   useEffect(() => {
     let cancelled =
@@ -103,52 +173,90 @@ export default function MapEditor({
           "loading"
         )
 
-        const result =
-          await loadSharedBuildingPlacements(
+        const [
+          buildingResult,
+          helicopterResult,
+        ] = await Promise.all([
+          loadSharedBuildingPlacements(
             cityId
-          )
+          ),
+
+          loadSharedWorldMapAccess(
+            cityId
+          ),
+        ])
 
         if (cancelled) {
           return
         }
 
         setPlacements(
-          result.placements
+          buildingResult.placements
         )
 
-        /*
-         * Au premier passage sur ordinateur,
-         * les positions déjà réglées dans le
-         * localStorage du PC sont publiées.
-         *
-         * Un téléphone ne peut donc pas écraser
-         * accidentellement les positions du PC.
-         */
+        setHelicopterPlacement(
+          helicopterResult.placement
+        )
+
+        const isDesktop =
+          window.innerWidth >=
+          768
+
+        let nextBuildings =
+          buildingResult.placements
+
+        let nextHelicopter =
+          helicopterResult.placement
+
+        let publishedSomething =
+          false
+
         if (
-          !result.hasRemotePlacements &&
-          window.innerWidth >= 768
+          isDesktop &&
+          !buildingResult.hasRemotePlacements
         ) {
-          const synchronized =
+          nextBuildings =
             await saveSharedBuildingPlacements(
               cityId,
-              result.placements
+              nextBuildings
             )
 
-          if (!cancelled) {
-            setPlacements(
-              synchronized
+          publishedSomething =
+            true
+        }
+
+        if (
+          isDesktop &&
+          !helicopterResult.hasRemotePlacement
+        ) {
+          nextHelicopter =
+            await saveSharedWorldMapAccess(
+              cityId,
+              nextHelicopter
             )
 
-            setSyncStatus(
-              "saved"
-            )
-          }
+          publishedSomething =
+            true
+        }
 
+        if (cancelled) {
           return
         }
 
+        setPlacements(
+          nextBuildings
+        )
+
+        setHelicopterPlacement(
+          nextHelicopter
+        )
+
         setSyncStatus(
-          result.hasRemotePlacements
+          publishedSomething ||
+          (
+            buildingResult.hasRemotePlacements &&
+            helicopterResult.hasRemotePlacement
+          )
             ? "saved"
             : "local"
         )
@@ -184,7 +292,9 @@ export default function MapEditor({
 
   function scheduleRemoteSave(
     updatedPlacements:
-      BuildingPlacements
+      BuildingPlacements,
+    updatedHelicopter:
+      WorldMapAccessPlacement
   ) {
     if (
       saveTimerRef.current !==
@@ -203,14 +313,27 @@ export default function MapEditor({
       window.setTimeout(
         async () => {
           try {
-            const synchronized =
-              await saveSharedBuildingPlacements(
+            const [
+              synchronizedBuildings,
+              synchronizedHelicopter,
+            ] = await Promise.all([
+              saveSharedBuildingPlacements(
                 cityId,
                 updatedPlacements
-              )
+              ),
+
+              saveSharedWorldMapAccess(
+                cityId,
+                updatedHelicopter
+              ),
+            ])
 
             setPlacements(
-              synchronized
+              synchronizedBuildings
+            )
+
+            setHelicopterPlacement(
+              synchronizedHelicopter
             )
 
             setSyncStatus(
@@ -233,8 +356,32 @@ export default function MapEditor({
 
   function updateSelectedPlacement(
     changes:
-      Partial<BuildingPlacement>
+      Partial<
+        EditablePlacement
+      >
   ) {
+    if (
+      selectedType ===
+      "helicopter"
+    ) {
+      const updatedHelicopter =
+        saveWorldMapAccessPlacement({
+          ...helicopterPlacement,
+          ...changes,
+        })
+
+      setHelicopterPlacement(
+        updatedHelicopter
+      )
+
+      scheduleRemoteSave(
+        placements,
+        updatedHelicopter
+      )
+
+      return
+    }
+
     const updatedPlacement:
       BuildingPlacement = {
         ...placements[
@@ -264,7 +411,8 @@ export default function MapEditor({
     )
 
     scheduleRemoteSave(
-      updatedPlacements
+      updatedPlacements,
+      helicopterPlacement
     )
 
     onSave?.(
@@ -326,8 +474,15 @@ export default function MapEditor({
     const defaults =
       resetBuildingPlacements()
 
+    const helicopterDefaults =
+      resetWorldMapAccessPlacement()
+
     setPlacements(
       defaults
+    )
+
+    setHelicopterPlacement(
+      helicopterDefaults
     )
 
     setSyncStatus(
@@ -335,14 +490,27 @@ export default function MapEditor({
     )
 
     try {
-      const synchronized =
-        await saveSharedBuildingPlacements(
+      const [
+        synchronizedBuildings,
+        synchronizedHelicopter,
+      ] = await Promise.all([
+        saveSharedBuildingPlacements(
           cityId,
           defaults
-        )
+        ),
+
+        saveSharedWorldMapAccess(
+          cityId,
+          helicopterDefaults
+        ),
+      ])
 
       setPlacements(
-        synchronized
+        synchronizedBuildings
+      )
+
+      setHelicopterPlacement(
+        synchronizedHelicopter
       )
 
       setSyncStatus(
@@ -366,14 +534,27 @@ export default function MapEditor({
         "saving"
       )
 
-      const synchronized =
-        await saveSharedBuildingPlacements(
+      const [
+        synchronizedBuildings,
+        synchronizedHelicopter,
+      ] = await Promise.all([
+        saveSharedBuildingPlacements(
           cityId,
           placements
-        )
+        ),
+
+        saveSharedWorldMapAccess(
+          cityId,
+          helicopterPlacement
+        ),
+      ])
 
       setPlacements(
-        synchronized
+        synchronizedBuildings
+      )
+
+      setHelicopterPlacement(
+        synchronizedHelicopter
       )
 
       setSyncStatus(
@@ -395,11 +576,15 @@ export default function MapEditor({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-700 bg-zinc-900 p-3">
         <div className="flex flex-wrap gap-2">
-          {BUILDING_TYPES.map(
+          {EDITOR_OBJECTS.map(
             (type) => {
               const isSelected =
                 selectedType ===
                 type
+
+              const isHelicopter =
+                type ===
+                "helicopter"
 
               return (
                 <button
@@ -412,14 +597,22 @@ export default function MapEditor({
                   }
                   className={`rounded-lg px-4 py-2 font-semibold transition ${
                     isSelected
-                      ? "bg-blue-600 text-white shadow-lg shadow-blue-950"
-                      : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                      ? isHelicopter
+                        ? "bg-amber-600 text-white shadow-lg shadow-amber-950"
+                        : "bg-blue-600 text-white shadow-lg shadow-blue-950"
+                      : isHelicopter
+                        ? "border border-amber-500/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20"
+                        : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
                   }`}
                 >
+                  {isHelicopter
+                    ? "🚁 "
+                    : ""}
+
                   {
-                    BUILDING_NAMES[
+                    getObjectName(
                       type
-                    ]
+                    )
                   }
                 </button>
               )
@@ -451,11 +644,11 @@ export default function MapEditor({
       </div>
 
       <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
-        Les positions sont maintenant
-        enregistrées dans Supabase.
-        Elles restent identiques sur
-        ordinateur, téléphone et après
-        un déploiement Vercel.
+        Les bâtiments et l'hélicoptère
+        sont maintenant enregistrés dans
+        Supabase. Leur position reste la
+        même sur ordinateur, téléphone
+        et après un déploiement Vercel.
       </div>
 
       <div
@@ -473,8 +666,18 @@ export default function MapEditor({
 
           <input
             type="range"
-            min="3"
-            max="40"
+            min={
+              selectedType ===
+                "helicopter"
+                ? "3"
+                : "3"
+            }
+            max={
+              selectedType ===
+                "helicopter"
+                ? "35"
+                : "40"
+            }
             step="0.5"
             value={
               selectedPlacement.width
@@ -579,7 +782,7 @@ export default function MapEditor({
           <input
             type="range"
             min="1"
-            max="20"
+            max="100"
             step="1"
             value={
               selectedPlacement.zIndex
@@ -607,17 +810,24 @@ export default function MapEditor({
             }
             className="w-full rounded-lg bg-red-700 px-4 py-2 font-semibold text-white transition hover:bg-red-600"
           >
-            Réinitialiser
+            Tout réinitialiser
           </button>
         </div>
       </div>
 
-      <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+      <div
+        className={`rounded-lg border px-4 py-3 text-sm ${
+          selectedType ===
+            "helicopter"
+            ? "border-amber-500/25 bg-amber-500/10 text-amber-100"
+            : "border-blue-500/20 bg-blue-500/10 text-blue-100"
+        }`}
+      >
         <strong>
           {
-            BUILDING_NAMES[
+            getObjectName(
               selectedType
-            ]
+            )
           }
         </strong>
 
@@ -706,7 +916,7 @@ export default function MapEditor({
                   className={`relative transition ${
                     isSelected
                       ? "drop-shadow-[0_0_18px_rgba(59,130,246,1)]"
-                      : "opacity-80"
+                      : "opacity-75"
                   }`}
                 >
                   <img
@@ -746,16 +956,84 @@ export default function MapEditor({
         )}
 
         <div
+          className="absolute"
+          style={{
+            left:
+              `${helicopterPlacement.x}%`,
+
+            top:
+              `${helicopterPlacement.y}%`,
+
+            width:
+              `${helicopterPlacement.width}%`,
+
+            zIndex:
+              helicopterPlacement.zIndex,
+
+            transform: `
+              translate(-50%, -50%)
+              rotate(${helicopterPlacement.rotation}deg)
+            `,
+
+            transformOrigin:
+              "center center",
+          }}
+        >
+          <div
+            className={`relative transition ${
+              selectedType ===
+                "helicopter"
+                ? "drop-shadow-[0_0_22px_rgba(251,191,36,1)]"
+                : "opacity-80"
+            }`}
+          >
+            <img
+              src="/world/helicopter.png"
+              alt="Hélicoptère"
+              className="pointer-events-none block w-full select-none"
+              draggable={false}
+            />
+
+            {selectedType ===
+              "helicopter" && (
+              <>
+                <div className="pointer-events-none absolute inset-0 rounded-xl border-2 border-amber-400" />
+
+                <div className="pointer-events-none absolute left-1/2 top-1/2 h-[70%] w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-amber-300/70" />
+              </>
+            )}
+          </div>
+
+          <div
+            className={`absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded px-2 py-1 text-xs font-bold ${
+              selectedType ===
+                "helicopter"
+                ? "bg-amber-600 text-white"
+                : "bg-black/70 text-amber-200"
+            }`}
+          >
+            🚁 Hélicoptère
+          </div>
+        </div>
+
+        <div
           data-editor-control
-          className="absolute left-3 top-3 z-50 rounded-lg bg-black/80 px-3 py-2 text-sm text-white"
+          className="absolute left-3 top-3 z-[120] rounded-lg bg-black/85 px-3 py-2 text-sm text-white"
         >
           Clique sur la carte pour
           déplacer{" "}
-          <strong>
+          <strong
+            className={
+              selectedType ===
+                "helicopter"
+                ? "text-amber-300"
+                : "text-blue-300"
+            }
+          >
             {
-              BUILDING_NAMES[
+              getObjectName(
                 selectedType
-              ]
+              )
             }
           </strong>
         </div>
@@ -775,6 +1053,7 @@ function SyncBadge({
     loading: {
       label:
         "Chargement...",
+
       classes:
         "border-zinc-500/30 bg-zinc-500/10 text-zinc-300",
     },
@@ -782,6 +1061,7 @@ function SyncBadge({
     local: {
       label:
         "Positions locales",
+
       classes:
         "border-amber-500/30 bg-amber-500/10 text-amber-200",
     },
@@ -789,6 +1069,7 @@ function SyncBadge({
     saving: {
       label:
         "Synchronisation...",
+
       classes:
         "border-blue-500/30 bg-blue-500/10 text-blue-200",
     },
@@ -796,6 +1077,7 @@ function SyncBadge({
     saved: {
       label:
         "Synchronisé",
+
       classes:
         "border-green-500/30 bg-green-500/10 text-green-200",
     },
@@ -803,6 +1085,7 @@ function SyncBadge({
     error: {
       label:
         "Erreur de synchronisation",
+
       classes:
         "border-red-500/30 bg-red-500/10 text-red-200",
     },
