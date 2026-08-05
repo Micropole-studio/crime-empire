@@ -52,6 +52,7 @@ import SecurityRecruitmentModal from "./components/SecurityRecruitmentModal"
 import InventoryModal from "./components/InventoryModal"
 import MissionsModal from "./components/MissionsModal"
 import CommanderModal from "./components/CommanderModal"
+import WorldMap from "./components/world/WorldMap"
 
 type GameData = {
   player: any
@@ -62,6 +63,7 @@ type GameData = {
 
 type GameMode =
   | "city"
+  | "world"
   | "editor"
 
 function getSafeRate(
@@ -242,6 +244,14 @@ export default function App() {
 
     setMode(
       "city"
+    )
+  }
+
+  function openWorldMap() {
+    closeAllPanels()
+
+    setMode(
+      "world"
     )
   }
 
@@ -635,8 +645,7 @@ export default function App() {
         />
       )}
 
-      {mode ===
-      "city" ? (
+      {mode === "city" && (
         <>
           <div
             className="absolute inset-x-0 bottom-0"
@@ -656,6 +665,9 @@ export default function App() {
               }
               onBuildingClick={
                 setSelectedBuildingId
+              }
+              onWorldMapOpen={
+                openWorldMap
               }
             />
           </div>
@@ -758,7 +770,17 @@ export default function App() {
             }
           />
         </>
-      ) : (
+      )}
+
+      {mode === "world" && (
+        <WorldMap
+          onBack={
+            openCity
+          }
+        />
+      )}
+
+      {mode === "editor" && (
         <div className="h-full overflow-y-auto bg-black p-4 pb-16 text-white md:p-6">
           <div className="mx-auto max-w-7xl">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

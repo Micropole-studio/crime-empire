@@ -37,12 +37,18 @@ import {
   loadSharedBuildingPlacements,
 } from "../../services/buildingPlacementService"
 
+import {
+  WORLD_MAP_HELICOPTER_PLACEMENT,
+} from "../../data/worldMapAccess"
+
 type Props = {
   cityId: string
   buildings: Building[]
   onBuildingClick?: (
     id: string
   ) => void
+
+  onWorldMapOpen?: () => void
 }
 
 type Camera = {
@@ -114,6 +120,7 @@ export default function GameMap({
   cityId,
   buildings,
   onBuildingClick,
+  onWorldMapOpen,
 }: Props) {
   const viewportRef =
     useRef<HTMLDivElement | null>(
@@ -1109,6 +1116,62 @@ export default function GameMap({
             }
           }}
         />
+
+        {/* ACCÈS À LA CARTE DU MONDE */}
+        <button
+          type="button"
+          data-map-interactive
+          aria-label="Ouvrir la carte du monde"
+          title="Ouvrir la carte du monde"
+          onPointerDown={(event) => {
+            event.stopPropagation()
+          }}
+          onDoubleClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+          onClick={(event) => {
+            event.stopPropagation()
+            onWorldMapOpen?.()
+          }}
+          className="group absolute cursor-pointer border-0 bg-transparent p-0"
+          style={{
+            left:
+              `${WORLD_MAP_HELICOPTER_PLACEMENT.x}%`,
+
+            top:
+              `${WORLD_MAP_HELICOPTER_PLACEMENT.y}%`,
+
+            width:
+              `${WORLD_MAP_HELICOPTER_PLACEMENT.width}%`,
+
+            zIndex:
+              WORLD_MAP_HELICOPTER_PLACEMENT.zIndex,
+
+            transform: `
+              translate(-50%, -50%)
+              rotate(${WORLD_MAP_HELICOPTER_PLACEMENT.rotation}deg)
+            `,
+
+            transformOrigin:
+              "center center",
+          }}
+        >
+          <div className="pointer-events-none absolute inset-[12%] rounded-full bg-amber-400/20 blur-xl transition duration-300 group-hover:bg-amber-300/35 group-hover:blur-2xl" />
+
+          <div className="pointer-events-none absolute left-1/2 top-1/2 h-[62%] w-[62%] -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full border border-amber-300/35 shadow-[0_0_24px_rgba(251,191,36,0.35)]" />
+
+          <img
+            src="/world/helicopter.png"
+            alt=""
+            className="pointer-events-none relative z-10 block w-full select-none drop-shadow-[0_12px_10px_rgba(0,0,0,0.7)] transition duration-300 group-hover:scale-105 group-hover:brightness-110"
+            draggable={false}
+          />
+
+          <div className="pointer-events-none absolute left-1/2 top-full z-20 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-full border border-amber-300/30 bg-black/85 px-3 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-amber-200 opacity-90 shadow-xl backdrop-blur transition group-hover:border-amber-200/60 group-hover:text-amber-100 sm:text-[10px]">
+            🌍 Carte du monde
+          </div>
+        </button>
 
         {uniqueBuildings.map(
           (building) => {
