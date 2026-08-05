@@ -89,13 +89,6 @@ const EDITOR_OBJECTS:
     "helicopter",
   ]
 
-function isBuildingType(
-  value: EditorObjectType
-): value is BuildingType {
-  return value !==
-    "helicopter"
-}
-
 function getObjectName(
   type: EditorObjectType
 ) {
