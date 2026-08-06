@@ -9,10 +9,8 @@ import {
 import { RESEARCHES } from "../data/researches"
 import { TROOPS } from "../data/troops"
 
-import ActionSpeedupsPanel from "./ActionSpeedupsPanel"
-
 import {
-  getActiveRecruitment,
+  getActiveRecruitments,
   getHighestBuildingLevel,
   getRecruitmentRemainingSeconds,
   getRecruitmentTimeSeconds,
@@ -291,17 +289,17 @@ export default function SecurityRecruitmentModal({
     )
 
   const limits =
-  useMemo(
-    () =>
-      getSecurityRecruitmentLimits(
+    useMemo(
+      () =>
+        getSecurityRecruitmentLimits(
+          securityLevel,
+          researches
+        ),
+      [
         securityLevel,
-        researches
-      ),
-    [
-      securityLevel,
-      researches,
-    ]
-  )
+        researches,
+      ]
+    )
 
   const totalOwned =
     useMemo(
@@ -317,58 +315,118 @@ export default function SecurityRecruitmentModal({
       [cityTroops]
     )
 
-  const remainingCapacity =
-    Math.max(
-      0,
-      limits.capacity -
-        totalOwned
-    )
-
-  const activeRecruitment =
+  const activeRecruitments =
     useMemo(
       () =>
-        getActiveRecruitment(
+        getActiveRecruitments(
           recruitments
+        ).sort(
+          (
+            first,
+            second
+          ) =>
+            new Date(
+              first.started_at
+            ).getTime() -
+            new Date(
+              second.started_at
+            ).getTime()
         ),
       [recruitments]
     )
 
-  const activeRemainingSeconds =
-    useMemo(() => {
-      if (!activeRecruitment) {
-        return 0
-      }
+  const queuedQuantity =
+    useMemo(
+      () =>
+        activeRecruitments.reduce(
+          (
+            total,
+            recruitment
+          ) =>
+            total +
+            (
+              Number(
+                recruitment.quantity
+              ) || 0
+            ),
+          0
+        ),
+      [activeRecruitments]
+    )
 
-      return getRecruitmentRemainingSeconds(
-        activeRecruitment,
-        currentTime
-      )
-    }, [
-      activeRecruitment,
-      currentTime,
-    ])
+  const remainingCapacity =
+    Math.max(
+      0,
+      limits.capacity -
+        totalOwned -
+        queuedQuantity
+    )
+
+  const availableQueueCount =
+    Math.max(
+      0,
+      limits.queueCount -
+        activeRecruitments.length
+    )
+
+  const hasAvailableRecruitmentQueue =
+    availableQueueCount >
+    0
+
+  const activeRecruitmentStates =
+    useMemo(
+      () =>
+        activeRecruitments.map(
+          (
+            recruitment,
+            index
+          ) => ({
+            queueNumber:
+              index + 1,
+
+            recruitment,
+
+            remainingSeconds:
+              getRecruitmentRemainingSeconds(
+                recruitment,
+                currentTime
+              ),
+          })
+        ),
+      [
+        activeRecruitments,
+        currentTime,
+      ]
+    )
+
+  const hasFinishedRecruitment =
+    activeRecruitmentStates.some(
+      (state) =>
+        state.remainingSeconds <=
+        0
+    )
 
   useEffect(() => {
     if (
-      !activeRecruitment ||
-      activeRemainingSeconds > 0 ||
+      !hasFinishedRecruitment ||
       syncInProgress.current
     ) {
       return
     }
 
-    syncInProgress.current = true
+    syncInProgress.current =
+      true
 
     loadMilitaryData()
       .then(async () => {
         await onRecruitmentStarted?.()
       })
       .finally(() => {
-        syncInProgress.current = false
+        syncInProgress.current =
+          false
       })
   }, [
-    activeRecruitment,
-    activeRemainingSeconds,
+    hasFinishedRecruitment,
     loadMilitaryData,
     onRecruitmentStarted,
   ])
@@ -508,7 +566,7 @@ export default function SecurityRecruitmentModal({
 
         <div className="space-y-5 p-6">
           {/* RÉSUMÉ */}
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
             <SummaryCard
               label="Sécurité"
               value={`Niv. ${securityLevel}`}
@@ -538,6 +596,12 @@ export default function SecurityRecruitmentModal({
               value={`+${limits.speedPercent} %`}
               icon="⚡"
             />
+
+            <SummaryCard
+              label="Files"
+              value={`${activeRecruitments.length} / ${limits.queueCount}`}
+              icon="⏩"
+            />
           </section>
 
           {/* RESSOURCES */}
@@ -561,67 +625,149 @@ export default function SecurityRecruitmentModal({
             />
           </section>
 
-          {/* RECRUTEMENT ACTIF */}
-          {activeRecruitment && (
-            <section className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-5">
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">
-                    Recrutement en cours
-                  </p>
+          {/* FILES DE RECRUTEMENT */}
+          <section className="rounded-xl border border-amber-400/25 bg-amber-500/[0.07] p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">
+                  Files de recrutement
+                </p>
 
-                  <h3 className="mt-1 text-lg font-black text-white">
-                    {
-                      TROOPS[
-                        activeRecruitment
-                          .troop_key
-                      ]?.name
-                    }
-                    {" × "}
-                    {
-                      activeRecruitment.quantity
-                    }
-                  </h3>
+                <h3 className="mt-1 text-lg font-black text-white">
+                  {activeRecruitments.length}
+                  {" / "}
+                  {limits.queueCount}
+                  {" occupée(s)"}
+                </h3>
 
-                  <p className="mt-1 text-sm text-zinc-400">
-                    Une seule commande peut
-                    être entraînée à la fois.
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-amber-400/20 bg-black/30 px-5 py-3 text-center">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                    Temps restant
-                  </p>
-
-                  <p className="mt-1 whitespace-nowrap text-xl font-black text-amber-200">
-                    ⏱{" "}
-                    {formatDuration(
-                      activeRemainingSeconds
-                    )}
-                  </p>
-                </div>
+                <p className="mt-1 text-sm text-zinc-400">
+                  {limits.queueCount >
+                  1
+                    ? "Le Centre d'entraînement parallèle permet deux recrutements simultanés."
+                    : "Une deuxième file peut être débloquée dans les recherches militaires."}
+                </p>
               </div>
 
-              <ActionSpeedupsPanel
-                cityId={city.id}
-                targetType="recruitment"
-                targetId={
-                  activeRecruitment.id
+              <span
+                className={`rounded-full border px-3 py-1 text-xs font-black ${
+                  hasAvailableRecruitmentQueue
+                    ? "border-green-400/25 bg-green-500/10 text-green-200"
+                    : "border-red-400/25 bg-red-500/10 text-red-200"
+                }`}
+              >
+                {availableQueueCount}
+                {" file(s) libre(s)"}
+              </span>
+            </div>
+
+            <div
+              className={`mt-4 grid gap-3 ${
+                limits.queueCount >
+                1
+                  ? "md:grid-cols-2"
+                  : "grid-cols-1"
+              }`}
+            >
+              {Array.from({
+                length:
+                  limits.queueCount,
+              }).map(
+                (
+                  _,
+                  queueIndex
+                ) => {
+                  const state =
+                    activeRecruitmentStates[
+                      queueIndex
+                    ]
+
+                  if (!state) {
+                    return (
+                      <div
+                        key={
+                          queueIndex
+                        }
+                        className="rounded-xl border border-dashed border-green-500/30 bg-green-500/[0.06] p-4"
+                      >
+                        <p className="text-[10px] font-black uppercase tracking-wider text-green-300/70">
+                          File{" "}
+                          {queueIndex +
+                            1}
+                        </p>
+
+                        <p className="mt-2 font-black text-green-200">
+                          ✓ Disponible
+                        </p>
+
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Une nouvelle commande
+                          peut être lancée.
+                        </p>
+                      </div>
+                    )
+                  }
+
+                  const definition =
+                    TROOPS[
+                      state.recruitment
+                        .troop_key
+                    ]
+
+                  return (
+                    <div
+                      key={
+                        state.recruitment
+                          .id
+                      }
+                      className="rounded-xl border border-amber-400/25 bg-black/25 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-wider text-amber-300/70">
+                            File{" "}
+                            {
+                              state.queueNumber
+                            }
+                          </p>
+
+                          <p className="mt-1 font-black text-white">
+                            {
+                              definition?.name
+                            }
+                            {" × "}
+                            {
+                              state.recruitment
+                                .quantity
+                            }
+                          </p>
+                        </div>
+
+                        <span className="text-lg">
+                          {
+                            definition?.icon ??
+                            "🕴️"
+                          }
+                        </span>
+                      </div>
+
+                      <div className="mt-3 rounded-lg border border-amber-400/15 bg-black/30 px-3 py-2">
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">
+                          Temps restant
+                        </p>
+
+                        <p className="mt-1 font-black text-amber-200">
+                          ⏱{" "}
+                          {formatDuration(
+                            state.remainingSeconds
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  )
                 }
-                remainingSeconds={
-                  activeRemainingSeconds
-                }
-                title="Accélérer le recrutement"
-                description="Utilisez un accélérateur de recrutement ou un accélérateur universel directement sur cette commande."
-                accent="amber"
-                onApplied={async () => {
-                  await loadMilitaryData()
-                  await onRecruitmentStarted?.()
-                }}
-              />
-            </section>
-          )}
+              )}
+            </div>
+          </section>
 
           {errorMessage && (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200">
@@ -720,7 +866,7 @@ export default function SecurityRecruitmentModal({
                       state.unlocked &&
                       hasEnoughResources &&
                       hasCapacity &&
-                      !activeRecruitment &&
+                      hasAvailableRecruitmentQueue &&
                       !startingTroop
 
                     const researchName =
@@ -731,13 +877,13 @@ export default function SecurityRecruitmentModal({
                           ]?.name
                         : null
 
-                   const recruitmentTime =
+                    const recruitmentTime =
                       getRecruitmentTimeSeconds(
-                      troopType,
-                      quantity,
-                      securityLevel,
-                      researches
-                     )
+                        troopType,
+                        quantity,
+                        securityLevel,
+                        researches
+                      )
 
                     return (
                       <article
@@ -984,8 +1130,11 @@ export default function SecurityRecruitmentModal({
                               !state.hasRequiredResearch
                               ? "Recherche militaire requise"
                               : "Conditions non remplies"
-                            : activeRecruitment
-                              ? "Un recrutement est déjà en cours"
+                            : !hasAvailableRecruitmentQueue
+                              ? limits.queueCount >
+                                1
+                                ? "Toutes les files sont occupées"
+                                : "Un recrutement est déjà en cours"
                               : !hasCapacity
                                 ? "Capacité militaire atteinte"
                                 : !hasEnoughResources
