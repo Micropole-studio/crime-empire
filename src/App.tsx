@@ -777,6 +777,15 @@ export default function App() {
           onBack={
             openCity
           }
+          currentCityName={
+            playerName
+          }
+          currentVillaLevel={
+            currentVillaLevel
+          }
+          commanderLevel={
+            commanderLevel
+          }
         />
       )}
 
