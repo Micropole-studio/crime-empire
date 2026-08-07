@@ -15,6 +15,24 @@ export type ResearchType =
   | "deployment_capacity_3"
   | "criminal_command"
 
+  /*
+   * Affaires clandestines
+   */
+  | "underground_accounting_1"
+  | "supplier_network_1"
+  | "ghost_workshops_1"
+  | "influence_network_1"
+  | "hidden_warehouses_1"
+
+  /*
+   * Réseau & Territoire
+   */
+  | "clandestine_routes_1"
+  | "clandestine_routes_2"
+  | "loot_organization_1"
+  | "loot_organization_2"
+  | "experienced_teams_1"
+
 export type ResearchStatus =
   | "researching"
   | "completed"
