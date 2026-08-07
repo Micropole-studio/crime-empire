@@ -10,6 +10,7 @@ import { RESEARCHES } from "../data/researches"
 import { TROOPS } from "../data/troops"
 
 import {
+  getDeploymentResearchBonus,
   getSecurityDeploymentCapacity,
   getTroopCommandPointCost,
 } from "../data/deployment"
@@ -320,13 +321,27 @@ export default function SecurityRecruitmentModal({
       [cityTroops]
     )
 
+  const deploymentResearchBonus =
+    useMemo(
+      () =>
+        getDeploymentResearchBonus(
+          researches
+        ),
+      [researches]
+    )
+
   const deploymentCapacity =
     useMemo(
       () =>
         getSecurityDeploymentCapacity(
-          securityLevel
+          securityLevel,
+          0,
+          deploymentResearchBonus
         ),
-      [securityLevel]
+      [
+        securityLevel,
+        deploymentResearchBonus,
+      ]
     )
 
   const activeRecruitments =
@@ -604,12 +619,23 @@ export default function SecurityRecruitmentModal({
 
             <p className="mt-1 text-xs leading-relaxed text-cyan-100/70">
               Le Poste de Sécurité ne limite plus le nombre total
-              de soldats possédés. Ses
+              de soldats possédés. Capacité actuelle :
               {" "}
               {deploymentCapacity.totalCommandPoints}
               {" "}
-              points servent uniquement à préparer une future
-              opération sur la World Map.
+              points
+              {" "}
+              (
+              {deploymentCapacity.baseCommandPoints}
+              {" "}
+              de base
+              {deploymentResearchBonus >
+              0
+                ? ` + ${deploymentResearchBonus} grâce aux recherches`
+                : ""}
+              ).
+              Ces points serviront à préparer les opérations sur la
+              World Map.
             </p>
           </section>
 

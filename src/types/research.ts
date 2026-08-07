@@ -10,25 +10,10 @@ export type ResearchType =
   | "recruitment_capacity_2"
   | "henchman_doctrine"
   | "second_recruitment_queue"
+  | "deployment_capacity_1"
+  | "deployment_capacity_2"
+  | "deployment_capacity_3"
   | "criminal_command"
-
-  /*
-   * Affaires clandestines
-   */
-  | "underground_accounting_1"
-  | "supplier_network_1"
-  | "ghost_workshops_1"
-  | "influence_network_1"
-  | "hidden_warehouses_1"
-
-  /*
-   * Réseau & Territoire
-   */
-  | "clandestine_routes_1"
-  | "clandestine_routes_2"
-  | "loot_organization_1"
-  | "loot_organization_2"
-  | "experienced_teams_1"
 
 export type ResearchStatus =
   | "researching"
