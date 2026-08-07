@@ -10,6 +10,11 @@ import { RESEARCHES } from "../data/researches"
 import { TROOPS } from "../data/troops"
 
 import {
+  getSecurityDeploymentCapacity,
+  getTroopCommandPointCost,
+} from "../data/deployment"
+
+import {
   getActiveRecruitments,
   getHighestBuildingLevel,
   getRecruitmentRemainingSeconds,
@@ -315,6 +320,15 @@ export default function SecurityRecruitmentModal({
       [cityTroops]
     )
 
+  const deploymentCapacity =
+    useMemo(
+      () =>
+        getSecurityDeploymentCapacity(
+          securityLevel
+        ),
+      [securityLevel]
+    )
+
   const activeRecruitments =
     useMemo(
       () =>
@@ -333,33 +347,6 @@ export default function SecurityRecruitmentModal({
             ).getTime()
         ),
       [recruitments]
-    )
-
-  const queuedQuantity =
-    useMemo(
-      () =>
-        activeRecruitments.reduce(
-          (
-            total,
-            recruitment
-          ) =>
-            total +
-            (
-              Number(
-                recruitment.quantity
-              ) || 0
-            ),
-          0
-        ),
-      [activeRecruitments]
-    )
-
-  const remainingCapacity =
-    Math.max(
-      0,
-      limits.capacity -
-        totalOwned -
-        queuedQuantity
     )
 
   const availableQueueCount =
@@ -447,13 +434,11 @@ export default function SecurityRecruitmentModal({
     troopType: TroopType,
     value: number
   ) {
-    const safeMaximum = Math.max(
-      1,
-      Math.min(
-        limits.maxOrder,
-        remainingCapacity
+    const safeMaximum =
+      Math.max(
+        1,
+        limits.maxOrder
       )
-    )
 
     const safeValue = Math.min(
       safeMaximum,
@@ -566,7 +551,7 @@ export default function SecurityRecruitmentModal({
 
         <div className="space-y-5 p-6">
           {/* RÉSUMÉ */}
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
             <SummaryCard
               label="Sécurité"
               value={`Niv. ${securityLevel}`}
@@ -580,9 +565,17 @@ export default function SecurityRecruitmentModal({
             />
 
             <SummaryCard
-              label="Troupes"
-              value={`${totalOwned} / ${limits.capacity}`}
+              label="Troupes possédées"
+              value={formatNumber(
+                totalOwned
+              )}
               icon="🕴️"
+            />
+
+            <SummaryCard
+              label="Déploiement"
+              value={`${deploymentCapacity.totalCommandPoints} pts`}
+              icon="🎯"
             />
 
             <SummaryCard
@@ -602,6 +595,22 @@ export default function SecurityRecruitmentModal({
               value={`${activeRecruitments.length} / ${limits.queueCount}`}
               icon="⏩"
             />
+          </section>
+
+          <section className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.07] px-4 py-3">
+            <p className="text-sm font-black text-cyan-100">
+              Stock d'armée sans limite de jeu
+            </p>
+
+            <p className="mt-1 text-xs leading-relaxed text-cyan-100/70">
+              Le Poste de Sécurité ne limite plus le nombre total
+              de soldats possédés. Ses
+              {" "}
+              {deploymentCapacity.totalCommandPoints}
+              {" "}
+              points servent uniquement à préparer une future
+              opération sur la World Map.
+            </p>
           </section>
 
           {/* RESSOURCES */}
@@ -853,19 +862,12 @@ export default function SecurityRecruitmentModal({
                       hasEnoughInfluence
 
                     const maxSelectable =
-                      Math.min(
-                        limits.maxOrder,
-                        remainingCapacity
-                      )
-
-                    const hasCapacity =
-                      remainingCapacity > 0 &&
-                      maxSelectable > 0
+                      limits.maxOrder
 
                     const canRecruit =
                       state.unlocked &&
                       hasEnoughResources &&
-                      hasCapacity &&
+                      maxSelectable > 0 &&
                       hasAvailableRecruitmentQueue &&
                       !startingTroop
 
@@ -922,12 +924,22 @@ export default function SecurityRecruitmentModal({
                               }
                             </p>
 
-                            <p className="mt-2 text-xs font-semibold text-zinc-300">
-                              Possédés :{" "}
-                              {formatNumber(
-                                ownedQuantity
-                              )}
-                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
+                              <span className="rounded-full border border-zinc-700 bg-black/25 px-2 py-1 text-zinc-300">
+                                Possédés :{" "}
+                                {formatNumber(
+                                  ownedQuantity
+                                )}
+                              </span>
+
+                              <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2 py-1 text-cyan-200">
+                                🎯{" "}
+                                {getTroopCommandPointCost(
+                                  troopType
+                                )}
+                                {" pt / unité"}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
@@ -1135,14 +1147,12 @@ export default function SecurityRecruitmentModal({
                                 1
                                 ? "Toutes les files sont occupées"
                                 : "Un recrutement est déjà en cours"
-                              : !hasCapacity
-                                ? "Capacité militaire atteinte"
-                                : !hasEnoughResources
-                                  ? "Ressources insuffisantes"
-                                  : startingTroop ===
-                                      troopType
-                                    ? "Lancement..."
-                                    : `Recruter × ${quantity}`}
+                              : !hasEnoughResources
+                                ? "Ressources insuffisantes"
+                                : startingTroop ===
+                                    troopType
+                                  ? "Lancement..."
+                                  : `Recruter × ${quantity}`}
                         </button>
                       </article>
                     )

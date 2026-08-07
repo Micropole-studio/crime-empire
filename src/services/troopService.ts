@@ -38,8 +38,6 @@ export type CityRecruitment = {
 }
 
 export type RecruitmentLimits = {
-  capacity: number
-
   baseMaxOrder: number
   researchMaxOrderBonus: number
   maxOrder: number
@@ -49,22 +47,6 @@ export type RecruitmentLimits = {
   speedPercent: number
 
   queueCount: number
-}
-
-const SECURITY_CAPACITY_BY_LEVEL: Record<
-  number,
-  number
-> = {
-  1: 10,
-  2: 15,
-  3: 25,
-  4: 35,
-  5: 50,
-  6: 70,
-  7: 95,
-  8: 125,
-  9: 160,
-  10: 200,
 }
 
 const SECURITY_MAX_ORDER_BY_LEVEL: Record<
@@ -118,7 +100,6 @@ export function getSecurityRecruitmentLimits(
 
   if (safeLevel < 1) {
     return {
-      capacity: 0,
       baseMaxOrder: 0,
       researchMaxOrderBonus: 0,
       maxOrder: 0,
@@ -178,11 +159,6 @@ export function getSecurityRecruitmentLimits(
   }
 
   return {
-    capacity:
-      SECURITY_CAPACITY_BY_LEVEL[
-        safeLevel
-      ] ?? 0,
-
     baseMaxOrder,
     researchMaxOrderBonus,
     maxOrder:
@@ -713,42 +689,6 @@ export async function startRecruitment(
   if (safeQuantity > limits.maxOrder) {
     throw new Error(
       `Tu peux recruter au maximum ${limits.maxOrder} troupes par commande`
-    )
-  }
-
-  const ownedQuantity =
-    synced.troops.reduce(
-      (total, troop) =>
-        total +
-        (Number(troop.quantity) || 0),
-      0
-    )
-
-  const queuedQuantity =
-    activeRecruitments.reduce(
-      (total, recruitment) =>
-        total +
-        (Number(
-          recruitment.quantity
-        ) || 0),
-      0
-    )
-
-  if (
-    ownedQuantity +
-      queuedQuantity +
-      safeQuantity >
-    limits.capacity
-  ) {
-    const remainingCapacity = Math.max(
-      0,
-      limits.capacity -
-        ownedQuantity -
-        queuedQuantity
-    )
-
-    throw new Error(
-      `Capacité militaire insuffisante. Places restantes : ${remainingCapacity}`
     )
   }
 
