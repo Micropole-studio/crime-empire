@@ -14,18 +14,62 @@ import {
   createWorldNodes,
 } from "../../data/worldMapNodes"
 
+import WorldOperationPanel from "./WorldOperationPanel"
+
+import {
+  syncCityRecruitments,
+} from "../../services/troopService"
+
+import {
+  syncCityResearches,
+} from "../../services/researchService"
+
+import {
+  clearWorldOperation,
+  loadWorldOperation,
+  saveWorldOperation,
+} from "../../services/worldOperationStorage"
+
+import type {
+  Building,
+} from "../../types/building"
+
+import type {
+  CommanderSkills,
+} from "../../types/commander"
+
+import type {
+  HumanDeploymentSelection,
+} from "../../types/deployment"
+
+import type {
+  CityResearch,
+} from "../../types/research"
+
+import type {
+  CityTroop,
+} from "../../types/troop"
+
 import type {
   WorldNode,
   WorldResourceType,
   WorldRewardRange,
 } from "../../types/worldMap"
 
+import type {
+  WorldOperation,
+} from "../../types/worldOperation"
+
 type Props = {
   onBack: () => void
+
+  cityId: string
+  buildings: Building[]
 
   currentCityName: string
   currentVillaLevel: number
   commanderLevel: number
+  commanderSkills: CommanderSkills
 }
 
 type Camera = {
@@ -110,9 +154,12 @@ function formatDuration(
 
 export default function WorldMap({
   onBack,
+  cityId,
+  buildings,
   currentCityName,
   currentVillaLevel,
   commanderLevel,
+  commanderSkills,
 }: Props) {
   const viewportRef =
     useRef<HTMLDivElement | null>(
@@ -140,9 +187,11 @@ export default function WorldMap({
   const [
     camera,
     setCamera,
-  ] = useState<Camera>(
-    cameraRef.current
-  )
+  ] = useState<Camera>({
+    x: 0,
+    y: 0,
+    scale: 1,
+  })
 
   const [
     worldSize,
@@ -162,6 +211,160 @@ export default function WorldMap({
   ] = useState<WorldNode | null>(
     null
   )
+
+  const [
+    preparingNode,
+    setPreparingNode,
+  ] = useState<WorldNode | null>(
+    null
+  )
+
+  const [
+    cityTroops,
+    setCityTroops,
+  ] = useState<CityTroop[]>([])
+
+  const [
+    researches,
+    setResearches,
+  ] = useState<CityResearch[]>([])
+
+  const [
+    militaryLoading,
+    setMilitaryLoading,
+  ] = useState(true)
+
+  const [
+    militaryError,
+    setMilitaryError,
+  ] = useState<string | null>(null)
+
+  const [
+    activeOperation,
+    setActiveOperation,
+  ] = useState<WorldOperation | null>(
+    () => loadWorldOperation(cityId)
+  )
+
+  const [
+    currentTime,
+    setCurrentTime,
+  ] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!cityId) {
+      return
+    }
+
+    let cancelled = false
+
+    Promise.all([
+      syncCityRecruitments(cityId),
+      syncCityResearches(cityId),
+    ])
+      .then(([
+        recruitmentResult,
+        researchResult,
+      ]) => {
+        if (cancelled) {
+          return
+        }
+
+        setCityTroops(
+          recruitmentResult.troops
+        )
+
+        setResearches(
+          researchResult
+        )
+
+        setMilitaryError(null)
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return
+        }
+
+        setMilitaryError(
+          error instanceof Error
+            ? error.message
+            : "Impossible de charger les forces disponibles"
+        )
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setMilitaryLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [cityId])
+
+  useEffect(() => {
+    const intervalId =
+      window.setInterval(() => {
+        setCurrentTime(Date.now())
+      }, 1000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [])
+
+  function launchOperation(
+    node: WorldNode,
+    selection: HumanDeploymentSelection,
+    squadPower: number
+  ) {
+    if (activeOperation) {
+      return
+    }
+
+    const travelSeconds = Math.max(
+      1,
+      Math.floor(
+        Number(node.travelSeconds) || 1
+      )
+    )
+
+    const startedAt = new Date()
+    const arrivalAt = new Date(
+      startedAt.getTime() +
+        travelSeconds * 1000
+    )
+
+    const operation: WorldOperation = {
+      id:
+        typeof crypto !== "undefined" &&
+        typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `world-${Date.now()}`,
+
+      cityId,
+      targetNodeId: node.id,
+      targetName: node.name,
+      targetIcon: node.icon,
+      startedAt: startedAt.toISOString(),
+      arrivalAt: arrivalAt.toISOString(),
+      travelSeconds,
+      squadPower,
+      enemyPower: node.recommendedPower,
+      selection: { ...selection },
+    }
+
+    saveWorldOperation(operation)
+    setActiveOperation(operation)
+    setCurrentTime(Date.now())
+    setPreparingNode(null)
+    setSelectedNode(null)
+  }
+
+  function recallOperation() {
+    clearWorldOperation(cityId)
+    setActiveOperation(null)
+  }
 
   const nodes =
     useMemo(
@@ -886,10 +1089,21 @@ export default function WorldMap({
         Glisser pour explorer • molette pour zoomer
       </div>
 
+      {activeOperation && (
+        <ActiveWorldOperationCard
+          operation={activeOperation}
+          currentTime={currentTime}
+          onRecall={recallOperation}
+        />
+      )}
+
       {selectedNode && (
         <WorldNodePanel
           node={
             selectedNode
+          }
+          activeOperation={
+            activeOperation
           }
           onClose={() =>
             setSelectedNode(
@@ -899,6 +1113,30 @@ export default function WorldMap({
           onBack={
             onBack
           }
+          onPrepare={() =>
+            setPreparingNode(
+              selectedNode
+            )
+          }
+        />
+      )}
+
+      {preparingNode && (
+        <WorldOperationPanel
+          key={preparingNode.id}
+          node={preparingNode}
+          buildings={buildings}
+          cityTroops={cityTroops}
+          researches={researches}
+          commanderLevel={commanderLevel}
+          commanderSkills={commanderSkills}
+          activeOperation={activeOperation}
+          loading={militaryLoading}
+          errorMessage={militaryError}
+          onClose={() =>
+            setPreparingNode(null)
+          }
+          onLaunch={launchOperation}
         />
       )}
     </main>
@@ -1013,14 +1251,18 @@ function WorldNodeMarker({
 
 type WorldNodePanelProps = {
   node: WorldNode
+  activeOperation: WorldOperation | null
   onClose: () => void
   onBack: () => void
+  onPrepare: () => void
 }
 
 function WorldNodePanel({
   node,
+  activeOperation,
   onClose,
   onBack,
+  onPrepare,
 }: WorldNodePanelProps) {
   const isCity =
     node.type ===
@@ -1160,13 +1402,113 @@ function WorldNodePanel({
         ) : (
           <button
             type="button"
-            disabled
-            className="w-full cursor-not-allowed rounded-xl bg-red-950/60 px-4 py-3 text-sm font-black text-red-300/60"
+            onClick={onPrepare}
+            disabled={Boolean(activeOperation)}
+            className="w-full rounded-xl bg-red-700 px-4 py-3 text-sm font-black text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
           >
-            ⚔️ Préparer l'opération — prochaine étape
+            {activeOperation
+              ? "🚁 Une opération est déjà en cours"
+              : "⚔️ Préparer l'opération"}
           </button>
         )}
       </div>
+    </aside>
+  )
+}
+
+function ActiveWorldOperationCard({
+  operation,
+  currentTime,
+  onRecall,
+}: {
+  operation: WorldOperation
+  currentTime: number
+  onRecall: () => void
+}) {
+  const arrivalTime = new Date(
+    operation.arrivalAt
+  ).getTime()
+
+  const remainingSeconds =
+    Number.isFinite(arrivalTime)
+      ? Math.max(
+          0,
+          Math.ceil(
+            (arrivalTime - currentTime) /
+              1000
+          )
+        )
+      : 0
+
+  const arrived =
+    remainingSeconds <= 0
+
+  return (
+    <aside
+      data-world-interactive
+      className="absolute left-3 top-24 z-30 w-[min(360px,calc(100%-72px))] rounded-2xl border border-red-500/25 bg-black/88 p-3 shadow-2xl backdrop-blur-xl sm:left-5 sm:p-4"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/10 text-xl">
+          {operation.targetIcon}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-[9px] font-black uppercase tracking-[0.16em] text-red-300/75">
+            {arrived
+              ? "Escouade sur zone"
+              : "Opération en cours"}
+          </p>
+
+          <p className="mt-1 truncate font-black text-white">
+            {operation.targetName}
+          </p>
+
+          <p className="mt-1 text-xs font-semibold text-zinc-400">
+            {arrived
+              ? "Équipe arrivée • en attente de l'ordre d'assaut"
+              : `Arrivée dans ${formatDuration(remainingSeconds)}`}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-2.5">
+          <p className="text-[8px] font-black uppercase tracking-wide text-zinc-600">
+            Escouade
+          </p>
+          <p className="mt-1 font-black text-white">
+            {formatNumber(operation.squadPower)}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-2.5">
+          <p className="text-[8px] font-black uppercase tracking-wide text-zinc-600">
+            Ennemi
+          </p>
+          <p className="mt-1 font-black text-red-200">
+            {formatNumber(operation.enemyPower)}
+          </p>
+        </div>
+      </div>
+
+      {arrived && (
+        <button
+          type="button"
+          disabled
+          className="mt-3 w-full cursor-not-allowed rounded-xl bg-red-950/60 px-3 py-2.5 text-xs font-black text-red-300/60"
+        >
+          ⚔️ Donner l'ordre d'assaut — prochaine phase
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={onRecall}
+        className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
+      >
+        Rappeler l'escouade
+      </button>
     </aside>
   )
 }

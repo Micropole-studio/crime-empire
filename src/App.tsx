@@ -777,6 +777,12 @@ export default function App() {
           onBack={
             openCity
           }
+          cityId={
+            String(data.city.id)
+          }
+          buildings={
+            data.buildings
+          }
           currentCityName={
             playerName
           }
@@ -785,6 +791,9 @@ export default function App() {
           }
           commanderLevel={
             commanderLevel
+          }
+          commanderSkills={
+            data.commanderSkills
           }
         />
       )}
