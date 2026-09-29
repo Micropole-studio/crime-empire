@@ -96,9 +96,17 @@ export function createWorldNodes({
       cooldownHours: 6,
 
       rewards: {
-        moneyMin: 800,
-        moneyMax: 1500,
+        moneyGuaranteed: 1000,
+        moneyBonusMax: 500,
         commanderXp: 40,
+        specialDrop: {
+          itemKey: "money_bag",
+          name: "Sac de billets",
+          icon: "💼",
+          chancePercent: 8,
+          moneyMin: 700,
+          moneyMax: 1200,
+        },
       },
     },
 
@@ -128,11 +136,19 @@ export function createWorldNodes({
       cooldownHours: 8,
 
       rewards: {
-        materialsMin: 25,
-        materialsMax: 45,
-        moneyMin: 400,
-        moneyMax: 800,
+        materialsGuaranteed: 30,
+        materialsBonusMax: 15,
+        moneyGuaranteed: 500,
+        moneyBonusMax: 300,
         commanderXp: 65,
+        specialDrop: {
+          itemKey: "materials_crate",
+          name: "Caisse de matériaux",
+          icon: "📦",
+          chancePercent: 7,
+          materialsMin: 20,
+          materialsMax: 35,
+        },
       },
     },
 
@@ -162,11 +178,19 @@ export function createWorldNodes({
       cooldownHours: 12,
 
       rewards: {
-        materialsMin: 20,
-        materialsMax: 35,
-        equipmentMin: 5,
-        equipmentMax: 10,
+        materialsGuaranteed: 25,
+        materialsBonusMax: 10,
+        equipmentGuaranteed: 6,
+        equipmentBonusMax: 4,
         commanderXp: 90,
+        specialDrop: {
+          itemKey: "equipment_case",
+          name: "Lot d'équipements",
+          icon: "🧰",
+          chancePercent: 6,
+          equipmentMin: 4,
+          equipmentMax: 7,
+        },
       },
     },
 
@@ -196,11 +220,19 @@ export function createWorldNodes({
       cooldownHours: 24,
 
       rewards: {
-        moneyMin: 1800,
-        moneyMax: 3000,
-        influenceMin: 12,
-        influenceMax: 24,
+        moneyGuaranteed: 2000,
+        moneyBonusMax: 1000,
+        influenceGuaranteed: 14,
+        influenceBonusMax: 10,
         commanderXp: 140,
+        specialDrop: {
+          itemKey: "influence_files",
+          name: "Dossiers compromettants",
+          icon: "🗂️",
+          chancePercent: 5,
+          influenceMin: 6,
+          influenceMax: 10,
+        },
       },
     },
   ]

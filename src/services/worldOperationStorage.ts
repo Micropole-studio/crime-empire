@@ -78,6 +78,20 @@ export function loadWorldOperation(
         parsed.troopsReserved ?? false,
       phase:
         parsed.phase ?? "outbound",
+      combatResult:
+        parsed.combatResult
+          ? {
+              ...parsed.combatResult,
+              replacementCost:
+                parsed.combatResult.replacementCost ?? {
+                  money: 0,
+                  equipment: 0,
+                  influence: 0,
+                },
+            }
+          : undefined,
+      settlementProgress:
+        parsed.settlementProgress ?? {},
     } as WorldOperation
   } catch {
     return null

@@ -138,6 +138,18 @@ function formatNumber(
   )
 }
 
+function formatSignedNumber(
+  value: number
+) {
+  return new Intl.NumberFormat(
+    "fr-FR",
+    {
+      maximumFractionDigits: 0,
+      signDisplay: "exceptZero",
+    }
+  ).format(Number(value) || 0)
+}
+
 function formatDuration(
   totalSeconds: number
 ) {
@@ -703,14 +715,28 @@ export default function WorldMap({
         operation.combatResult,
       returnTroopsToGarrison:
         operation.troopsReserved,
+      settlementProgress:
+        operation.settlementProgress,
+      sourceLabel:
+        `Opération — ${operation.targetName}`,
+      onProgress: (settlementProgress) => {
+        persistOperation({
+          ...operation,
+          settlementProgress,
+        })
+      },
     })
-      .then(async (troops) => {
+      .then(async ({
+        troops,
+        settlementProgress,
+      }) => {
         setCityTroops(troops)
         setMilitaryError(null)
 
         const returnedOperation: WorldOperation = {
           ...operation,
           phase: "returned",
+          settlementProgress,
           settledAt:
             new Date().toISOString(),
         }
@@ -2086,8 +2112,51 @@ function ActiveWorldOperationCard({
 
             <ExactRewardLines
               rewards={result.rewards}
+              rewardDefinition={operation.targetRewards}
             />
+
+            {result.specialDrop && (
+              <div className="mt-3 rounded-lg border border-purple-400/20 bg-purple-500/10 p-2.5">
+                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-purple-200/80">
+                  Butin rare obtenu
+                </p>
+                <p className="mt-1 text-sm font-black text-white">
+                  {result.specialDrop.icon} {result.specialDrop.name}
+                </p>
+                <p className="mt-1 text-[10px] leading-relaxed text-zinc-400">
+                  {operation.phase === "returned"
+                    ? "Ajouté à ton inventaire. Ouvre-le quand tu veux pour récupérer son contenu."
+                    : "Le butin rare voyage avec les survivants et sera ajouté à l'inventaire au retour."}
+                </p>
+              </div>
+            )}
           </div>
+
+          {lostUnits > 0 && (
+            <div className="mt-3 border-t border-white/10 pt-3">
+              <p className="text-[9px] font-black uppercase tracking-[0.16em] text-zinc-500">
+                Coût de remplacement des pertes
+              </p>
+              <ReplacementCostLines
+                cost={result.replacementCost}
+              />
+
+              {isVictory && (
+                <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-2.5">
+                  <p className="text-[9px] font-black uppercase tracking-[0.14em] text-zinc-500">
+                    Bilan après remplacement
+                  </p>
+                  <NetOperationBalanceLines
+                    rewards={result.rewards}
+                    cost={result.replacementCost}
+                  />
+                  <p className="mt-1.5 text-[9px] font-semibold leading-relaxed text-zinc-600">
+                    Le butin rare éventuel n'est pas inclus dans ce bilan tant qu'il n'a pas été ouvert.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
 
@@ -2121,38 +2190,77 @@ function ActiveWorldOperationCard({
   )
 }
 
+function exactRewardLine(
+  icon: string,
+  label: string,
+  total: number,
+  guaranteed?: number,
+  bonusMax?: number
+) {
+  if (total <= 0) {
+    return null
+  }
+
+  const hasNewModel =
+    guaranteed !== undefined ||
+    bonusMax !== undefined
+
+  if (!hasNewModel) {
+    return `${icon} +${formatNumber(total)} ${label}`
+  }
+
+  const base = Math.max(
+    0,
+    Math.floor(Number(guaranteed) || 0)
+  )
+  const bonus = Math.max(0, total - base)
+
+  if (bonus > 0) {
+    return `${icon} +${formatNumber(total)} ${label} (${formatNumber(base)} garantis + ${formatNumber(bonus)} bonus)`
+  }
+
+  return `${icon} +${formatNumber(total)} ${label} (garanti)`
+}
+
 function ExactRewardLines({
   rewards,
+  rewardDefinition,
 }: {
   rewards: NonNullable<
     WorldOperation["combatResult"]
   >["rewards"]
+  rewardDefinition?: WorldRewardRange
 }) {
-  const lines: string[] = []
-
-  if (rewards.money > 0) {
-    lines.push(
-      `💵 +${formatNumber(rewards.money)} argent`
-    )
-  }
-
-  if (rewards.materials > 0) {
-    lines.push(
-      `🧱 +${formatNumber(rewards.materials)} matériaux`
-    )
-  }
-
-  if (rewards.equipment > 0) {
-    lines.push(
-      `🧰 +${formatNumber(rewards.equipment)} équipements`
-    )
-  }
-
-  if (rewards.influence > 0) {
-    lines.push(
-      `⭐ +${formatNumber(rewards.influence)} Influence`
-    )
-  }
+  const lines = [
+    exactRewardLine(
+      "💵",
+      "argent",
+      rewards.money,
+      rewardDefinition?.moneyGuaranteed,
+      rewardDefinition?.moneyBonusMax
+    ),
+    exactRewardLine(
+      "🧱",
+      "matériaux",
+      rewards.materials,
+      rewardDefinition?.materialsGuaranteed,
+      rewardDefinition?.materialsBonusMax
+    ),
+    exactRewardLine(
+      "🧰",
+      "équipements",
+      rewards.equipment,
+      rewardDefinition?.equipmentGuaranteed,
+      rewardDefinition?.equipmentBonusMax
+    ),
+    exactRewardLine(
+      "⭐",
+      "Influence",
+      rewards.influence,
+      rewardDefinition?.influenceGuaranteed,
+      rewardDefinition?.influenceBonusMax
+    ),
+  ].filter((line): line is string => Boolean(line))
 
   if (rewards.commanderXp > 0) {
     lines.push(
@@ -2168,6 +2276,102 @@ function ExactRewardLines({
     <div className="mt-2 space-y-1 text-xs font-bold text-zinc-300">
       {lines.map((line) => (
         <p key={line}>{line}</p>
+      ))}
+    </div>
+  )
+}
+
+function ReplacementCostLines({
+  cost,
+}: {
+  cost: NonNullable<
+    WorldOperation["combatResult"]
+  >["replacementCost"]
+}) {
+  const lines: string[] = []
+
+  if (cost.money > 0) {
+    lines.push(
+      `💵 ${formatNumber(cost.money)} argent`
+    )
+  }
+
+  if (cost.equipment > 0) {
+    lines.push(
+      `🧰 ${formatNumber(cost.equipment)} équipements`
+    )
+  }
+
+  if (cost.influence > 0) {
+    lines.push(
+      `⭐ ${formatNumber(cost.influence)} Influence`
+    )
+  }
+
+  if (lines.length === 0) {
+    lines.push("Aucun coût de remplacement")
+  }
+
+  return (
+    <div className="mt-2 space-y-1 text-[11px] font-bold text-zinc-300">
+      {lines.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+    </div>
+  )
+}
+
+function NetOperationBalanceLines({
+  rewards,
+  cost,
+}: {
+  rewards: NonNullable<
+    WorldOperation["combatResult"]
+  >["rewards"]
+  cost: NonNullable<
+    WorldOperation["combatResult"]
+  >["replacementCost"]
+}) {
+  const balances = [
+    {
+      icon: "💵",
+      label: "argent",
+      value: rewards.money - cost.money,
+    },
+    {
+      icon: "🧱",
+      label: "matériaux",
+      value: rewards.materials,
+    },
+    {
+      icon: "🧰",
+      label: "équipements",
+      value: rewards.equipment - cost.equipment,
+    },
+    {
+      icon: "⭐",
+      label: "Influence",
+      value: rewards.influence - cost.influence,
+    },
+  ].filter((entry) => entry.value !== 0)
+
+  if (balances.length === 0) {
+    return (
+      <p className="mt-1.5 text-[10px] font-bold text-zinc-400">
+        Bilan neutre sur les ressources suivies.
+      </p>
+    )
+  }
+
+  return (
+    <div className="mt-1.5 space-y-1 text-[10px] font-bold">
+      {balances.map((entry) => (
+        <p
+          key={entry.label}
+          className={entry.value >= 0 ? "text-emerald-300" : "text-red-300"}
+        >
+          {entry.icon} {formatSignedNumber(entry.value)} {entry.label}
+        </p>
       ))}
     </div>
   )
@@ -2193,85 +2397,115 @@ function InfoCard({
   )
 }
 
+function rewardPreviewLine(
+  icon: string,
+  label: string,
+  guaranteed: number | undefined,
+  bonusMax: number | undefined,
+  legacyMin: number | undefined,
+  legacyMax: number | undefined
+) {
+  if (
+    guaranteed !== undefined ||
+    bonusMax !== undefined
+  ) {
+    const base = Math.max(
+      0,
+      Math.floor(Number(guaranteed) || 0)
+    )
+    const bonus = Math.max(
+      0,
+      Math.floor(Number(bonusMax) || 0)
+    )
+
+    if (base <= 0 && bonus <= 0) {
+      return null
+    }
+
+    if (bonus > 0) {
+      return `${icon} ${formatNumber(base)} ${label} garantis + 0 à ${formatNumber(bonus)} bonus`
+    }
+
+    return `${icon} ${formatNumber(base)} ${label} garantis`
+  }
+
+  const min = Math.max(
+    0,
+    Math.floor(Number(legacyMin) || 0)
+  )
+  const max = Math.max(
+    min,
+    Math.floor(Number(legacyMax) || min)
+  )
+
+  if (max <= 0) {
+    return null
+  }
+
+  return `${icon} ${formatNumber(min)} à ${formatNumber(max)} ${label}`
+}
+
 function RewardLines({
   rewards,
 }: {
-  rewards:
-    WorldRewardRange
+  rewards: WorldRewardRange
 }) {
-  const lines: string[] =
-    []
+  const lines = [
+    rewardPreviewLine(
+      "💵",
+      "argent",
+      rewards.moneyGuaranteed,
+      rewards.moneyBonusMax,
+      rewards.moneyMin,
+      rewards.moneyMax
+    ),
+    rewardPreviewLine(
+      "🧱",
+      "matériaux",
+      rewards.materialsGuaranteed,
+      rewards.materialsBonusMax,
+      rewards.materialsMin,
+      rewards.materialsMax
+    ),
+    rewardPreviewLine(
+      "🧰",
+      "équipements",
+      rewards.equipmentGuaranteed,
+      rewards.equipmentBonusMax,
+      rewards.equipmentMin,
+      rewards.equipmentMax
+    ),
+    rewardPreviewLine(
+      "⭐",
+      "Influence",
+      rewards.influenceGuaranteed,
+      rewards.influenceBonusMax,
+      rewards.influenceMin,
+      rewards.influenceMax
+    ),
+  ].filter((line): line is string => Boolean(line))
 
-  if (
-    rewards.moneyMax
-  ) {
+  if (rewards.commanderXp) {
     lines.push(
-      `💵 ${formatNumber(
-        rewards.moneyMin ??
-          0
-      )} à ${formatNumber(
-        rewards.moneyMax
-      )} argent`
-    )
-  }
-
-  if (
-    rewards.materialsMax
-  ) {
-    lines.push(
-      `🧱 ${formatNumber(
-        rewards.materialsMin ??
-          0
-      )} à ${formatNumber(
-        rewards.materialsMax
-      )} matériaux`
-    )
-  }
-
-  if (
-    rewards.equipmentMax
-  ) {
-    lines.push(
-      `🧰 ${formatNumber(
-        rewards.equipmentMin ??
-          0
-      )} à ${formatNumber(
-        rewards.equipmentMax
-      )} équipements`
-    )
-  }
-
-  if (
-    rewards.influenceMax
-  ) {
-    lines.push(
-      `⭐ ${formatNumber(
-        rewards.influenceMin ??
-          0
-      )} à ${formatNumber(
-        rewards.influenceMax
-      )} Influence`
-    )
-  }
-
-  if (
-    rewards.commanderXp
-  ) {
-    lines.push(
-      `🧠 +${formatNumber(
-        rewards.commanderXp
-      )} XP commandant`
+      `🧠 +${formatNumber(rewards.commanderXp)} XP commandant`
     )
   }
 
   return (
     <div className="mt-2 space-y-1.5 text-sm font-semibold text-amber-100">
-      {lines.map(
-        (line) => (
-          <p key={line}>
-            {line}
-          </p>
-        )
+      {lines.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+
+      {rewards.specialDrop && (
+        <div className="mt-2 rounded-lg border border-purple-400/20 bg-purple-500/10 p-2 text-xs text-purple-100">
+          <span className="font-black">
+            {rewards.specialDrop.icon} Butin rare — {rewards.specialDrop.name}
+          </span>
+          <span className="ml-1 text-purple-200/70">
+            ({rewards.specialDrop.chancePercent} %)
+          </span>
+        </div>
       )}
     </div>
   )

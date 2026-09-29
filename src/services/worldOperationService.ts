@@ -1,4 +1,5 @@
 import { supabase } from "./supabase"
+import { createInventoryLoot } from "./inventoryService"
 
 import type {
   HumanDeploymentSelection,
@@ -12,6 +13,7 @@ import type {
 import type {
   WorldCombatResult,
   WorldOperationRewards,
+  WorldSettlementProgress,
 } from "../types/worldOperation"
 
 const TROOP_TYPES: TroopType[] = [
@@ -304,37 +306,94 @@ async function addCommanderXp(
   }
 }
 
+function markProgress(
+  progress: WorldSettlementProgress,
+  key: keyof WorldSettlementProgress
+) {
+  return {
+    ...progress,
+    [key]: new Date().toISOString(),
+  }
+}
+
 export async function settleWorldOperation({
   cityId,
   playerId,
   returningTroops,
   combatResult,
   returnTroopsToGarrison = true,
+  settlementProgress,
+  onProgress,
+  sourceLabel,
 }: {
   cityId: string
   playerId: string
   returningTroops: HumanDeploymentSelection
   combatResult?: WorldCombatResult
   returnTroopsToGarrison?: boolean
+  settlementProgress?: WorldSettlementProgress
+  onProgress?: (progress: WorldSettlementProgress) => void
+  sourceLabel?: string
 }) {
-  if (returnTroopsToGarrison) {
+  let progress: WorldSettlementProgress = {
+    ...(settlementProgress ?? {}),
+  }
+
+  const publishProgress = (
+    key: keyof WorldSettlementProgress
+  ) => {
+    progress = markProgress(progress, key)
+    onProgress?.(progress)
+  }
+
+  if (
+    returnTroopsToGarrison &&
+    !progress.troopsReturnedAt
+  ) {
     await returnTroops(
       cityId,
       returningTroops
     )
+    publishProgress("troopsReturnedAt")
   }
 
-  if (combatResult) {
+  if (
+    combatResult &&
+    !progress.resourcesGrantedAt
+  ) {
     await addCityRewards(
       cityId,
       combatResult.rewards
     )
+    publishProgress("resourcesGrantedAt")
+  }
 
+  if (
+    combatResult &&
+    !progress.commanderXpGrantedAt
+  ) {
     await addCommanderXp(
       playerId,
       combatResult.rewards.commanderXp
     )
+    publishProgress("commanderXpGrantedAt")
   }
 
-  return loadTroops(cityId)
+  if (
+    combatResult?.specialDrop &&
+    !progress.specialDropGrantedAt
+  ) {
+    await createInventoryLoot(
+      cityId,
+      combatResult.specialDrop.itemKey,
+      combatResult.specialDrop.payload,
+      sourceLabel ?? "World Map"
+    )
+    publishProgress("specialDropGrantedAt")
+  }
+
+  return {
+    troops: await loadTroops(cityId),
+    settlementProgress: progress,
+  }
 }

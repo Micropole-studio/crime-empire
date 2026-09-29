@@ -19,12 +19,30 @@ export type WorldCombatOutcome =
   | "defeat"
   | "recalled"
 
-export type WorldOperationRewards = {
+export type WorldResourceBundle = {
   money: number
   materials: number
   equipment: number
   influence: number
-  commanderXp: number
+}
+
+export type WorldOperationRewards =
+  WorldResourceBundle & {
+    commanderXp: number
+  }
+
+export type WorldSpecialLootDrop = {
+  itemKey: string
+  name: string
+  icon: string
+  chancePercent: number
+  payload: WorldResourceBundle
+}
+
+export type WorldReplacementCost = {
+  money: number
+  equipment: number
+  influence: number
 }
 
 export type WorldCombatResult = {
@@ -43,8 +61,17 @@ export type WorldCombatResult = {
   casualties: HumanDeploymentSelection
   survivors: HumanDeploymentSelection
   casualtyPercent: number
+  replacementCost: WorldReplacementCost
 
   rewards: WorldOperationRewards
+  specialDrop?: WorldSpecialLootDrop
+}
+
+export type WorldSettlementProgress = {
+  troopsReturnedAt?: string
+  resourcesGrantedAt?: string
+  commanderXpGrantedAt?: string
+  specialDropGrantedAt?: string
 }
 
 export type WorldOperation = {
@@ -90,5 +117,6 @@ export type WorldOperation = {
   returnAt?: string
   recalledAt?: string
 
+  settlementProgress?: WorldSettlementProgress
   settledAt?: string
 }

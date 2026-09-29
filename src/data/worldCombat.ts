@@ -16,6 +16,19 @@ import type {
   TroopType,
 } from "../types/troop"
 
+import type {
+  WorldCombatResult,
+  WorldOperationRewards,
+  WorldReplacementCost,
+  WorldResourceBundle,
+  WorldSpecialLootDrop,
+} from "../types/worldOperation"
+
+import type {
+  WorldRewardRange,
+  WorldSpecialDropDefinition,
+} from "../types/worldMap"
+
 export type WorldPowerAssessment =
   | "overwhelming_advantage"
   | "advantage"
@@ -138,15 +151,6 @@ export function assessWorldPower(
   return "critical"
 }
 
-import type {
-  WorldCombatResult,
-  WorldOperationRewards,
-} from "../types/worldOperation"
-
-import type {
-  WorldRewardRange,
-} from "../types/worldMap"
-
 function createSeededRandom(
   seedText: string
 ) {
@@ -191,6 +195,48 @@ function randomInteger(
   )
 }
 
+function rewardWithGuaranteedBase({
+  guaranteed,
+  bonusMax,
+  legacyMin,
+  legacyMax,
+  random,
+}: {
+  guaranteed?: number
+  bonusMax?: number
+  legacyMin?: number
+  legacyMax?: number
+  random: () => number
+}) {
+  const hasNewModel =
+    guaranteed !== undefined ||
+    bonusMax !== undefined
+
+  if (!hasNewModel) {
+    return randomInteger(
+      legacyMin,
+      legacyMax,
+      random
+    )
+  }
+
+  const base = Math.max(
+    0,
+    Math.floor(Number(guaranteed) || 0)
+  )
+
+  const bonus = randomInteger(
+    0,
+    Math.max(
+      0,
+      Math.floor(Number(bonusMax) || 0)
+    ),
+    random
+  )
+
+  return base + bonus
+}
+
 function createRewards(
   rewards: WorldRewardRange | undefined,
   victory: boolean,
@@ -215,32 +261,135 @@ function createRewards(
   }
 
   return {
-    money: randomInteger(
-      rewards?.moneyMin,
-      rewards?.moneyMax,
-      random
-    ),
+    money: rewardWithGuaranteedBase({
+      guaranteed: rewards?.moneyGuaranteed,
+      bonusMax: rewards?.moneyBonusMax,
+      legacyMin: rewards?.moneyMin,
+      legacyMax: rewards?.moneyMax,
+      random,
+    }),
 
-    materials: randomInteger(
-      rewards?.materialsMin,
-      rewards?.materialsMax,
-      random
-    ),
+    materials: rewardWithGuaranteedBase({
+      guaranteed: rewards?.materialsGuaranteed,
+      bonusMax: rewards?.materialsBonusMax,
+      legacyMin: rewards?.materialsMin,
+      legacyMax: rewards?.materialsMax,
+      random,
+    }),
 
-    equipment: randomInteger(
-      rewards?.equipmentMin,
-      rewards?.equipmentMax,
-      random
-    ),
+    equipment: rewardWithGuaranteedBase({
+      guaranteed: rewards?.equipmentGuaranteed,
+      bonusMax: rewards?.equipmentBonusMax,
+      legacyMin: rewards?.equipmentMin,
+      legacyMax: rewards?.equipmentMax,
+      random,
+    }),
 
-    influence: randomInteger(
-      rewards?.influenceMin,
-      rewards?.influenceMax,
-      random
-    ),
+    influence: rewardWithGuaranteedBase({
+      guaranteed: rewards?.influenceGuaranteed,
+      bonusMax: rewards?.influenceBonusMax,
+      legacyMin: rewards?.influenceMin,
+      legacyMax: rewards?.influenceMax,
+      random,
+    }),
 
     commanderXp,
   }
+}
+
+function createSpecialDrop(
+  definition: WorldSpecialDropDefinition | undefined,
+  victory: boolean,
+  random: () => number
+): WorldSpecialLootDrop | undefined {
+  if (!victory || !definition) {
+    return undefined
+  }
+
+  const chancePercent = Math.min(
+    100,
+    Math.max(
+      0,
+      Number(definition.chancePercent) || 0
+    )
+  )
+
+  if (chancePercent <= 0) {
+    return undefined
+  }
+
+  if (random() * 100 >= chancePercent) {
+    return undefined
+  }
+
+  const payload: WorldResourceBundle = {
+    money: randomInteger(
+      definition.moneyMin,
+      definition.moneyMax,
+      random
+    ),
+    materials: randomInteger(
+      definition.materialsMin,
+      definition.materialsMax,
+      random
+    ),
+    equipment: randomInteger(
+      definition.equipmentMin,
+      definition.equipmentMax,
+      random
+    ),
+    influence: randomInteger(
+      definition.influenceMin,
+      definition.influenceMax,
+      random
+    ),
+  }
+
+  return {
+    itemKey: definition.itemKey,
+    name: definition.name,
+    icon: definition.icon,
+    chancePercent,
+    payload,
+  }
+}
+
+function calculateReplacementCost(
+  casualties: HumanDeploymentSelection
+): WorldReplacementCost {
+  const total: WorldReplacementCost = {
+    money: 0,
+    equipment: 0,
+    influence: 0,
+  }
+
+  for (const [troopType, quantityValue] of (
+    Object.entries(casualties) as Array<
+      [TroopType, number | undefined]
+    >
+  )) {
+    const quantity = Math.max(
+      0,
+      Math.floor(Number(quantityValue) || 0)
+    )
+
+    const troop = TROOPS[troopType]
+
+    if (!troop || quantity <= 0) {
+      continue
+    }
+
+    total.money +=
+      quantity * Math.max(0, Number(troop.cost.money) || 0)
+
+    total.equipment +=
+      quantity * Math.max(0, Number(troop.cost.equipment) || 0)
+
+    total.influence +=
+      quantity * Math.max(0, Number(troop.cost.influence) || 0)
+  }
+
+  return total
 }
 
 function getCasualtyRate(
@@ -285,7 +434,7 @@ export function resolveWorldCombat({
   rewardRange?: WorldRewardRange
 }): WorldCombatResult {
   const random = createSeededRandom(
-    `${operationId}:combat-v1`
+    `${operationId}:combat-v2`
   )
 
   const attackerPower = Math.max(
@@ -352,9 +501,7 @@ export function resolveWorldCombat({
     const exactLosses = quantity * casualtyRate
     let losses = Math.floor(exactLosses)
 
-    if (
-      random() < exactLosses - losses
-    ) {
+    if (random() < exactLosses - losses) {
       losses += 1
     }
 
@@ -402,8 +549,15 @@ export function resolveWorldCombat({
       totalUnits > 0
         ? Math.round((totalCasualties / totalUnits) * 100)
         : 0,
+    replacementCost:
+      calculateReplacementCost(casualties),
     rewards: createRewards(
       rewardRange,
+      victory,
+      random
+    ),
+    specialDrop: createSpecialDrop(
+      rewardRange?.specialDrop,
       victory,
       random
     ),
