@@ -466,6 +466,38 @@ export default function WorldOperationPanel({
           </div>
         </header>
 
+        {node.imageSrc && (
+          <div className="relative h-40 overflow-hidden border-b border-zinc-800 sm:h-52">
+            <img
+              src={node.imageSrc}
+              alt={node.imageAlt ?? node.name}
+              className="h-full w-full object-cover"
+              draggable={false}
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/20 to-black/50" />
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950 via-zinc-950/45 to-transparent px-4 pb-4 pt-14 sm:px-6">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-300/80">
+                    Reconnaissance de la cible
+                  </p>
+                  <p className="mt-1 max-w-2xl text-xs font-semibold leading-relaxed text-zinc-300 sm:text-sm">
+                    {node.description}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-red-500/25 bg-black/70 px-3 py-2 text-right shadow-xl backdrop-blur">
+                  <p className="text-[9px] font-black uppercase tracking-wide text-zinc-500">
+                    Puissance ennemie
+                  </p>
+                  <p className="mt-0.5 text-lg font-black text-red-100">
+                    {formatNumber(node.recommendedPower)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid gap-5 p-4 sm:p-6 lg:grid-cols-[1.35fr_0.65fr]">
           <div className="space-y-4">
             <section>

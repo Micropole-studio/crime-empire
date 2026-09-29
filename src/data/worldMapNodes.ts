@@ -82,6 +82,8 @@ export function createWorldNodes({
         "Un réseau de contrebande peu protégé. Une cible idéale pour récupérer rapidement de l'argent.",
 
       icon: "💵",
+      imageSrc: "/world/locations/black-market-cover.webp",
+      imageAlt: "Marché noir clandestin éclairé aux néons",
 
       x: 46,
       y: 53,
@@ -122,6 +124,8 @@ export function createWorldNodes({
         "Des matériaux sont stockés sur ce chantier surveillé par une petite équipe armée.",
 
       icon: "🧱",
+      imageSrc: "/world/locations/construction-site-cover.webp",
+      imageAlt: "Chantier clandestin surveillé au crépuscule",
 
       x: 61,
       y: 72,
@@ -164,6 +168,8 @@ export function createWorldNodes({
         "Un entrepôt fortifié contenant des équipements destinés aux gangs de la région.",
 
       icon: "🧰",
+      imageSrc: "/world/locations/weapons-depot-cover.webp",
+      imageAlt: "Dépôt d’armes fortifié de nuit",
 
       x: 81,
       y: 53,
@@ -206,6 +212,8 @@ export function createWorldNodes({
         "Un réseau criminel implanté dans plusieurs quartiers. Le contrôler rapportera principalement de l'Influence.",
 
       icon: "⭐",
+      imageSrc: "/world/locations/district-network-cover.webp",
+      imageAlt: "Quartier criminel animé par les néons",
 
       x: 52,
       y: 29,

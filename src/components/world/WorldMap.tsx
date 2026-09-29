@@ -1626,13 +1626,28 @@ function WorldNodeMarker({
       />
 
       <span
-        className={`relative flex h-14 w-14 items-center justify-center rounded-2xl border-2 text-2xl backdrop-blur transition duration-200 group-hover:scale-110 ${
+        className={`relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border-2 p-0 text-2xl backdrop-blur transition duration-200 group-hover:scale-110 ${
           selected
             ? "scale-110 ring-2 ring-white/80"
             : ""
         } ${markerClasses}`}
       >
-        {node.icon}
+        {node.imageSrc && !isCity ? (
+          <>
+            <img
+              src={node.imageSrc}
+              alt=""
+              className="h-full w-full object-cover"
+              draggable={false}
+            />
+            <span className="absolute bottom-1 right-1 flex h-6 w-6 items-center justify-center rounded-lg border border-white/25 bg-black/80 text-sm shadow-lg">
+              {node.icon}
+            </span>
+            <span className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-white/[0.04]" />
+          </>
+        ) : (
+          node.icon
+        )}
       </span>
 
       <span className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-black/85 px-2.5 py-1 text-[10px] font-black text-white shadow-xl backdrop-blur">
@@ -1712,6 +1727,31 @@ function WorldNodePanel({
           ×
         </button>
       </div>
+
+      {node.imageSrc && (
+        <div className="relative mt-4 h-44 overflow-hidden rounded-2xl border border-white/10 bg-black sm:h-48">
+          <img
+            src={node.imageSrc}
+            alt={node.imageAlt ?? node.name}
+            className="h-full w-full object-cover"
+            draggable={false}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+          <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/55">
+                Cible extérieure
+              </p>
+              <p className="mt-1 text-sm font-black text-white">
+                {node.name}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/15 bg-black/75 px-2.5 py-1.5 text-lg shadow-xl backdrop-blur">
+              {node.icon}
+            </div>
+          </div>
+        </div>
+      )}
 
       <p className="mt-4 text-sm leading-relaxed text-zinc-400">
         {node.description}

@@ -64,6 +64,8 @@ export type WorldNode = {
   name: string
   description: string
   icon: string
+  imageSrc?: string
+  imageAlt?: string
 
   x: number
   y: number
