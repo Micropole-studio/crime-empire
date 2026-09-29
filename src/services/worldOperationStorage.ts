@@ -30,9 +30,7 @@ export function loadWorldOperation(
       return null
     }
 
-    const parsed = JSON.parse(
-      raw
-    ) as Partial<WorldOperation>
+    const parsed = JSON.parse(raw) as Partial<WorldOperation>
 
     if (
       parsed.cityId !== cityId ||
@@ -46,7 +44,41 @@ export function loadWorldOperation(
       return null
     }
 
-    return parsed as WorldOperation
+    /*
+     * Compatibilité avec une opération créée par la Phase 1 :
+     * on complète les nouveaux champs sans jeter l'expédition active.
+     */
+    return {
+      ...parsed,
+      playerId:
+        parsed.playerId ?? "",
+      targetIcon:
+        parsed.targetIcon ?? "⚔️",
+      targetType:
+        parsed.targetType ?? "bot_territory",
+      travelSeconds: Math.max(
+        1,
+        Math.floor(Number(parsed.travelSeconds) || 1)
+      ),
+      squadPower: Math.max(
+        0,
+        Math.floor(Number(parsed.squadPower) || 0)
+      ),
+      enemyPower: Math.max(
+        1,
+        Math.floor(Number(parsed.enemyPower) || 1)
+      ),
+      assaultPreparationSeconds: Math.max(
+        0,
+        Math.floor(Number(parsed.assaultPreparationSeconds) || 0)
+      ),
+      autoAssault:
+        parsed.autoAssault ?? false,
+      troopsReserved:
+        parsed.troopsReserved ?? false,
+      phase:
+        parsed.phase ?? "outbound",
+    } as WorldOperation
   } catch {
     return null
   }

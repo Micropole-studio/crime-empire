@@ -66,8 +66,9 @@ type Props = {
   onLaunch: (
     node: WorldNode,
     selection: HumanDeploymentSelection,
-    squadPower: number
-  ) => void
+    squadPower: number,
+    autoAssault: boolean
+  ) => Promise<void>
 }
 
 const TROOP_TYPES = Object.keys(
@@ -181,6 +182,15 @@ export default function WorldOperationPanel({
     useState<Record<TroopType, number>>(
       EMPTY_SELECTION
     )
+
+  const [autoAssault, setAutoAssault] =
+    useState(true)
+
+  const [isLaunching, setIsLaunching] =
+    useState(false)
+
+  const [launchError, setLaunchError] =
+    useState<string | null>(null)
 
   const securityLevel = useMemo(
     () =>
@@ -373,9 +383,36 @@ export default function WorldOperationPanel({
     !loading &&
     !errorMessage &&
     !activeOperation &&
+    !isLaunching &&
     selectedUnitCount > 0 &&
     squadPower.totalPower > 0 &&
     deploymentUsage.isWithinCapacity
+
+  async function handleLaunch() {
+    if (!canLaunch) {
+      return
+    }
+
+    try {
+      setIsLaunching(true)
+      setLaunchError(null)
+
+      await onLaunch(
+        node,
+        selection,
+        squadPower.totalPower,
+        autoAssault
+      )
+    } catch (error) {
+      setLaunchError(
+        error instanceof Error
+          ? error.message
+          : "Impossible de lancer l'opération"
+      )
+    } finally {
+      setIsLaunching(false)
+    }
+  }
 
   return (
     <div
@@ -697,27 +734,52 @@ export default function WorldOperationPanel({
                 </div>
               )}
 
+            <section className="rounded-2xl border border-red-500/20 bg-red-500/[0.05] p-4">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={autoAssault}
+                  onChange={(event) =>
+                    setAutoAssault(event.target.checked)
+                  }
+                  className="mt-0.5 h-5 w-5 accent-red-600"
+                />
+
+                <span className="min-w-0">
+                  <span className="block text-sm font-black text-white">
+                    Donner l'ordre d'assaut automatiquement à l'arrivée
+                  </span>
+
+                  <span className="mt-1 block text-xs leading-relaxed text-zinc-500">
+                    En PvE, le combat sera résolu immédiatement dès l'arrivée. En futur PvP, cette option lancera automatiquement la phase de préparation d'assaut sans supprimer le délai de réaction du défenseur.
+                  </span>
+                </span>
+              </label>
+            </section>
+
+            {launchError && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs font-semibold leading-relaxed text-red-200">
+                {launchError}
+              </div>
+            )}
+
             <button
               type="button"
-              onClick={() =>
-                onLaunch(
-                  node,
-                  selection,
-                  squadPower.totalPower
-                )
-              }
+              onClick={handleLaunch}
               disabled={!canLaunch}
               className="w-full rounded-xl bg-red-700 px-4 py-3.5 text-sm font-black text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
             >
-              {activeOperation
-                ? "Une opération est déjà en cours"
-                : selectedUnitCount <= 0
-                  ? "Sélectionne une escouade"
-                  : `🚁 Lancer l'opération — ${formatNumber(squadPower.totalPower)} puissance`}
+              {isLaunching
+                ? "🚁 Déploiement de l'escouade..."
+                : activeOperation
+                  ? "Une opération est déjà en cours"
+                  : selectedUnitCount <= 0
+                    ? "Sélectionne une escouade"
+                    : `🚁 Lancer l'opération — ${formatNumber(squadPower.totalPower)} puissance`}
             </button>
 
             <p className="px-1 text-center text-[10px] leading-relaxed text-zinc-600">
-              Cette phase réserve un seul déploiement actif. Les pertes, le combat et le butin seront branchés sur le moteur d'opération à l'étape suivante.
+              Les hommes envoyés quittent réellement la garnison pendant l'expédition. Après le combat, seuls les survivants reviennent en ville.
             </p>
           </aside>
         </div>

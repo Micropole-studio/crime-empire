@@ -14,6 +14,10 @@ import {
   createWorldNodes,
 } from "../../data/worldMapNodes"
 
+import {
+  resolveWorldCombat,
+} from "../../data/worldCombat"
+
 import WorldOperationPanel from "./WorldOperationPanel"
 
 import {
@@ -29,6 +33,16 @@ import {
   loadWorldOperation,
   saveWorldOperation,
 } from "../../services/worldOperationStorage"
+
+import {
+  getWorldNodeCooldownRemainingSeconds,
+  setWorldNodeCooldown,
+} from "../../services/worldCooldownStorage"
+
+import {
+  reserveWorldOperationTroops,
+  settleWorldOperation,
+} from "../../services/worldOperationService"
 
 import type {
   Building,
@@ -62,8 +76,10 @@ import type {
 
 type Props = {
   onBack: () => void
+  onGameChanged: () => Promise<void>
 
   cityId: string
+  playerId: string
   buildings: Building[]
 
   currentCityName: string
@@ -152,9 +168,25 @@ function formatDuration(
   return `${seconds} s`
 }
 
+function countDeployment(
+  selection: HumanDeploymentSelection
+) {
+  return Object.values(selection).reduce(
+    (total, quantity) =>
+      total +
+      Math.max(
+        0,
+        Math.floor(Number(quantity) || 0)
+      ),
+    0
+  )
+}
+
 export default function WorldMap({
   onBack,
+  onGameChanged,
   cityId,
+  playerId,
   buildings,
   currentCityName,
   currentVillaLevel,
@@ -313,13 +345,123 @@ export default function WorldMap({
     }
   }, [])
 
-  function launchOperation(
+  const operationProcessingRef =
+    useRef(false)
+
+  const persistOperation = useCallback(
+    (operation: WorldOperation) => {
+      saveWorldOperation(operation)
+      setActiveOperation(operation)
+      setCurrentTime(Date.now())
+    },
+    []
+  )
+
+  const resolveOperationCombat = useCallback(
+    (operation: WorldOperation) => {
+      if (operation.combatResult) {
+        return
+      }
+
+      const result = resolveWorldCombat({
+        operationId: operation.id,
+        squadPower: operation.squadPower,
+        enemyPower: operation.enemyPower,
+        selection: operation.selection,
+        rewardRange: operation.targetRewards,
+      })
+
+      const now = Date.now()
+
+      if (
+        operation.targetCooldownHours &&
+        operation.targetCooldownHours > 0
+      ) {
+        setWorldNodeCooldown(
+          cityId,
+          operation.targetNodeId,
+          operation.targetCooldownHours,
+          now
+        )
+      }
+
+      persistOperation({
+        ...operation,
+        phase: "returning",
+        combatResult: result,
+        returnStartedAt: new Date(now).toISOString(),
+        returnAt: new Date(
+          now + operation.travelSeconds * 1000
+        ).toISOString(),
+      })
+    },
+    [cityId, persistOperation]
+  )
+
+  const giveAssaultOrder = useCallback(
+    (operation: WorldOperation) => {
+      if (
+        operation.phase !== "ready" &&
+        operation.phase !== "outbound"
+      ) {
+        return
+      }
+
+      const now = Date.now()
+      const preparationSeconds = Math.max(
+        0,
+        Math.floor(
+          Number(
+            operation.assaultPreparationSeconds
+          ) || 0
+        )
+      )
+
+      if (preparationSeconds <= 0) {
+        resolveOperationCombat({
+          ...operation,
+          phase: "ready",
+          assaultOrderedAt:
+            new Date(now).toISOString(),
+        })
+        return
+      }
+
+      persistOperation({
+        ...operation,
+        phase: "assault_preparation",
+        assaultOrderedAt:
+          new Date(now).toISOString(),
+        assaultResolvesAt: new Date(
+          now + preparationSeconds * 1000
+        ).toISOString(),
+      })
+    },
+    [persistOperation, resolveOperationCombat]
+  )
+
+  async function launchOperation(
     node: WorldNode,
     selection: HumanDeploymentSelection,
-    squadPower: number
+    squadPower: number,
+    autoAssault: boolean
   ) {
     if (activeOperation) {
-      return
+      throw new Error(
+        "Une opération extérieure est déjà en cours."
+      )
+    }
+
+    const cooldownRemaining =
+      getWorldNodeCooldownRemainingSeconds(
+        cityId,
+        node.id
+      )
+
+    if (cooldownRemaining > 0) {
+      throw new Error(
+        `Cette cible se réorganise encore pendant ${formatDuration(cooldownRemaining)}.`
+      )
     }
 
     const travelSeconds = Math.max(
@@ -328,6 +470,14 @@ export default function WorldMap({
         Number(node.travelSeconds) || 1
       )
     )
+
+    const refreshedTroops =
+      await reserveWorldOperationTroops(
+        cityId,
+        selection
+      )
+
+    setCityTroops(refreshedTroops)
 
     const startedAt = new Date()
     const arrivalAt = new Date(
@@ -343,25 +493,91 @@ export default function WorldMap({
           : `world-${Date.now()}`,
 
       cityId,
+      playerId,
       targetNodeId: node.id,
       targetName: node.name,
       targetIcon: node.icon,
+      targetType: node.type,
       startedAt: startedAt.toISOString(),
       arrivalAt: arrivalAt.toISOString(),
       travelSeconds,
       squadPower,
       enemyPower: node.recommendedPower,
       selection: { ...selection },
+      troopsReserved: true,
+      autoAssault,
+      assaultPreparationSeconds:
+        node.type === "player_city"
+          ? 120
+          : 0,
+      phase: "outbound",
+      targetRewards:
+        node.rewards
+          ? { ...node.rewards }
+          : undefined,
+      targetCooldownHours:
+        node.cooldownHours,
     }
 
-    saveWorldOperation(operation)
-    setActiveOperation(operation)
-    setCurrentTime(Date.now())
+    persistOperation(operation)
     setPreparingNode(null)
     setSelectedNode(null)
+
+    await onGameChanged()
   }
 
   function recallOperation() {
+    const operation = activeOperation
+
+    if (
+      !operation ||
+      operation.phase === "returning" ||
+      operation.phase === "returned"
+    ) {
+      return
+    }
+
+    const now = Date.now()
+    const startedAt = new Date(
+      operation.startedAt
+    ).getTime()
+
+    const elapsedSeconds =
+      Number.isFinite(startedAt)
+        ? Math.max(
+            0,
+            Math.ceil(
+              (now - startedAt) / 1000
+            )
+          )
+        : operation.travelSeconds
+
+    const returnSeconds =
+      operation.phase === "outbound"
+        ? Math.max(
+            5,
+            Math.min(
+              operation.travelSeconds,
+              elapsedSeconds
+            )
+          )
+        : operation.travelSeconds
+
+    persistOperation({
+      ...operation,
+      phase: "returning",
+      recalledAt:
+        new Date(now).toISOString(),
+      returnStartedAt:
+        new Date(now).toISOString(),
+      returnAt: new Date(
+        now + returnSeconds * 1000
+      ).toISOString(),
+      assaultResolvesAt: undefined,
+    })
+  }
+
+  function closeOperationReport() {
     clearWorldOperation(cityId)
     setActiveOperation(null)
   }
@@ -380,6 +596,149 @@ export default function WorldMap({
         currentVillaLevel,
       ]
     )
+
+  useEffect(() => {
+    const operation = activeOperation
+
+    if (!operation) {
+      return
+    }
+
+    let transition: (() => void) | null = null
+
+    if (operation.phase === "outbound") {
+      const arrivalTime = new Date(
+        operation.arrivalAt
+      ).getTime()
+
+      if (
+        Number.isFinite(arrivalTime) &&
+        currentTime >= arrivalTime
+      ) {
+        transition = () => {
+          if (operation.autoAssault) {
+            giveAssaultOrder(operation)
+          } else {
+            persistOperation({
+              ...operation,
+              phase: "ready",
+            })
+          }
+        }
+      }
+    } else if (
+      operation.phase ===
+        "assault_preparation" &&
+      operation.assaultResolvesAt
+    ) {
+      const assaultTime = new Date(
+        operation.assaultResolvesAt
+      ).getTime()
+
+      if (
+        Number.isFinite(assaultTime) &&
+        currentTime >= assaultTime
+      ) {
+        transition = () => {
+          resolveOperationCombat(operation)
+        }
+      }
+    }
+
+    if (!transition) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(
+      transition,
+      0
+    )
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [
+    activeOperation,
+    currentTime,
+    giveAssaultOrder,
+    persistOperation,
+    resolveOperationCombat,
+  ])
+
+  useEffect(() => {
+    const operation = activeOperation
+
+    if (
+      !operation ||
+      operation.phase !== "returning" ||
+      !operation.returnAt ||
+      operationProcessingRef.current
+    ) {
+      return
+    }
+
+    const returnTime = new Date(
+      operation.returnAt
+    ).getTime()
+
+    if (
+      !Number.isFinite(returnTime) ||
+      currentTime < returnTime
+    ) {
+      return
+    }
+
+    operationProcessingRef.current = true
+
+    const returningTroops =
+      operation.combatResult?.survivors ??
+      operation.selection
+
+    settleWorldOperation({
+      cityId,
+      playerId:
+        operation.playerId || playerId,
+      returningTroops,
+      combatResult:
+        operation.combatResult,
+      returnTroopsToGarrison:
+        operation.troopsReserved,
+    })
+      .then(async (troops) => {
+        setCityTroops(troops)
+        setMilitaryError(null)
+
+        const returnedOperation: WorldOperation = {
+          ...operation,
+          phase: "returned",
+          settledAt:
+            new Date().toISOString(),
+        }
+
+        persistOperation(
+          returnedOperation
+        )
+
+        await onGameChanged()
+      })
+      .catch((error: unknown) => {
+        setMilitaryError(
+          error instanceof Error
+            ? error.message
+            : "Impossible de finaliser le retour de l'escouade"
+        )
+      })
+      .finally(() => {
+        operationProcessingRef.current = false
+      })
+  }, [
+    activeOperation,
+    cityId,
+    currentTime,
+    onGameChanged,
+    persistOperation,
+    playerId,
+  ])
 
   const getScaleLimits =
     useCallback(() => {
@@ -1094,6 +1453,10 @@ export default function WorldMap({
           operation={activeOperation}
           currentTime={currentTime}
           onRecall={recallOperation}
+          onAssault={() =>
+            giveAssaultOrder(activeOperation)
+          }
+          onCloseReport={closeOperationReport}
         />
       )}
 
@@ -1104,6 +1467,13 @@ export default function WorldMap({
           }
           activeOperation={
             activeOperation
+          }
+          cooldownRemainingSeconds={
+            getWorldNodeCooldownRemainingSeconds(
+              cityId,
+              selectedNode.id,
+              currentTime
+            )
           }
           onClose={() =>
             setSelectedNode(
@@ -1252,6 +1622,7 @@ function WorldNodeMarker({
 type WorldNodePanelProps = {
   node: WorldNode
   activeOperation: WorldOperation | null
+  cooldownRemainingSeconds: number
   onClose: () => void
   onBack: () => void
   onPrepare: () => void
@@ -1260,6 +1631,7 @@ type WorldNodePanelProps = {
 function WorldNodePanel({
   node,
   activeOperation,
+  cooldownRemainingSeconds,
   onClose,
   onBack,
   onPrepare,
@@ -1363,6 +1735,14 @@ function WorldNodePanel({
               value={`${node.cooldownHours} h`}
             />
           )}
+
+        {!isCity &&
+          cooldownRemainingSeconds > 0 && (
+            <InfoCard
+              label="Disponible dans"
+              value={formatDuration(cooldownRemainingSeconds)}
+            />
+          )}
       </div>
 
       {!isCity &&
@@ -1403,12 +1783,17 @@ function WorldNodePanel({
           <button
             type="button"
             onClick={onPrepare}
-            disabled={Boolean(activeOperation)}
+            disabled={
+              Boolean(activeOperation) ||
+              cooldownRemainingSeconds > 0
+            }
             className="w-full rounded-xl bg-red-700 px-4 py-3 text-sm font-black text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
           >
             {activeOperation
               ? "🚁 Une opération est déjà en cours"
-              : "⚔️ Préparer l'opération"}
+              : cooldownRemainingSeconds > 0
+                ? `⏳ Cible indisponible — ${formatDuration(cooldownRemainingSeconds)}`
+                : "⚔️ Préparer l'opération"}
           </button>
         )}
       </div>
@@ -1420,33 +1805,146 @@ function ActiveWorldOperationCard({
   operation,
   currentTime,
   onRecall,
+  onAssault,
+  onCloseReport,
 }: {
   operation: WorldOperation
   currentTime: number
   onRecall: () => void
+  onAssault: () => void
+  onCloseReport: () => void
 }) {
-  const arrivalTime = new Date(
-    operation.arrivalAt
-  ).getTime()
+  function secondsUntil(
+    dateValue?: string
+  ) {
+    if (!dateValue) {
+      return 0
+    }
 
-  const remainingSeconds =
-    Number.isFinite(arrivalTime)
-      ? Math.max(
-          0,
-          Math.ceil(
-            (arrivalTime - currentTime) /
-              1000
-          )
-        )
-      : 0
+    const targetTime = new Date(
+      dateValue
+    ).getTime()
 
-  const arrived =
-    remainingSeconds <= 0
+    if (!Number.isFinite(targetTime)) {
+      return 0
+    }
+
+    return Math.max(
+      0,
+      Math.ceil(
+        (targetTime - currentTime) /
+          1000
+      )
+    )
+  }
+
+  const arrivalRemaining =
+    secondsUntil(operation.arrivalAt)
+
+  const assaultRemaining =
+    secondsUntil(
+      operation.assaultResolvesAt
+    )
+
+  const returnRemaining =
+    secondsUntil(operation.returnAt)
+
+  const result =
+    operation.combatResult
+
+  const initialUnits =
+    countDeployment(
+      operation.selection
+    )
+
+  const lostUnits = result
+    ? countDeployment(
+        result.casualties
+      )
+    : 0
+
+  const survivingUnits = result
+    ? countDeployment(
+        result.survivors
+      )
+    : initialUnits
+
+  const isVictory =
+    result?.outcome === "victory"
+
+  const { eyebrow, statusText } = (() => {
+    if (operation.phase === "outbound") {
+      return {
+        eyebrow: "Escouade en route",
+        statusText: `Arrivée dans ${formatDuration(arrivalRemaining)}`,
+      }
+    }
+
+    if (operation.phase === "ready") {
+      return {
+        eyebrow: "Escouade sur zone",
+        statusText: operation.autoAssault
+          ? "Ordre automatique en cours de transmission"
+          : "En attente de ton ordre d'assaut",
+      }
+    }
+
+    if (
+      operation.phase ===
+      "assault_preparation"
+    ) {
+      return {
+        eyebrow: "Position d'assaut",
+        statusText: `Attaque dans ${formatDuration(assaultRemaining)}`,
+      }
+    }
+
+    if (operation.phase === "returning") {
+      if (operation.recalledAt && !result) {
+        return {
+          eyebrow: "Escouade rappelée",
+          statusText: `Retour dans ${formatDuration(returnRemaining)}`,
+        }
+      }
+
+      return {
+        eyebrow: isVictory
+          ? "Victoire — retour en cours"
+          : "Défaite — survivants en retour",
+        statusText: `Retour à la ville dans ${formatDuration(returnRemaining)}`,
+      }
+    }
+
+    if (operation.recalledAt && !result) {
+      return {
+        eyebrow: "Retour terminé",
+        statusText: "L'escouade est rentrée sans combattre.",
+      }
+    }
+
+    return {
+      eyebrow: isVictory
+        ? "Rapport de victoire"
+        : "Rapport de défaite",
+      statusText: "L'escouade est revenue en ville.",
+    }
+  })()
+
+  const showCombatReport =
+    Boolean(result) &&
+    (operation.phase === "returning" ||
+      operation.phase === "returned")
+
+  const canRecall =
+    operation.phase === "outbound" ||
+    operation.phase === "ready" ||
+    operation.phase ===
+      "assault_preparation"
 
   return (
     <aside
       data-world-interactive
-      className="absolute left-3 top-24 z-30 w-[min(360px,calc(100%-72px))] rounded-2xl border border-red-500/25 bg-black/88 p-3 shadow-2xl backdrop-blur-xl sm:left-5 sm:p-4"
+      className="absolute left-3 top-24 z-30 max-h-[calc(100%-120px)] w-[min(380px,calc(100%-72px))] overflow-y-auto rounded-2xl border border-red-500/25 bg-black/90 p-3 shadow-2xl backdrop-blur-xl sm:left-5 sm:p-4"
     >
       <div className="flex items-start gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/10 text-xl">
@@ -1454,20 +1952,24 @@ function ActiveWorldOperationCard({
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="text-[9px] font-black uppercase tracking-[0.16em] text-red-300/75">
-            {arrived
-              ? "Escouade sur zone"
-              : "Opération en cours"}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-red-300/75">
+              {eyebrow}
+            </p>
+
+            {operation.autoAssault && (
+              <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-wide text-amber-200">
+                Auto
+              </span>
+            )}
+          </div>
 
           <p className="mt-1 truncate font-black text-white">
             {operation.targetName}
           </p>
 
           <p className="mt-1 text-xs font-semibold text-zinc-400">
-            {arrived
-              ? "Équipe arrivée • en attente de l'ordre d'assaut"
-              : `Arrivée dans ${formatDuration(remainingSeconds)}`}
+            {statusText}
           </p>
         </div>
       </div>
@@ -1492,24 +1994,182 @@ function ActiveWorldOperationCard({
         </div>
       </div>
 
-      {arrived && (
+      {operation.phase === "ready" && (
         <button
           type="button"
-          disabled
-          className="mt-3 w-full cursor-not-allowed rounded-xl bg-red-950/60 px-3 py-2.5 text-xs font-black text-red-300/60"
+          onClick={onAssault}
+          className="mt-3 w-full rounded-xl bg-red-700 px-3 py-3 text-xs font-black text-white transition hover:bg-red-600"
         >
-          ⚔️ Donner l'ordre d'assaut — prochaine phase
+          ⚔️ Donner l'ordre d'assaut
         </button>
       )}
 
-      <button
-        type="button"
-        onClick={onRecall}
-        className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
-      >
-        Rappeler l'escouade
-      </button>
+      {operation.phase ===
+        "assault_preparation" && (
+        <section className="mt-3 rounded-xl border border-orange-500/25 bg-orange-500/10 p-3 text-center">
+          <p className="text-[9px] font-black uppercase tracking-[0.16em] text-orange-300/75">
+            Phase de réaction
+          </p>
+          <p className="mt-1 text-2xl font-black tabular-nums text-white">
+            {formatDuration(
+              assaultRemaining
+            )}
+          </p>
+          <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">
+            Cette fenêtre est destinée au futur PvP. Le défenseur pourra réorganiser sa garnison avant la résolution automatique du combat.
+          </p>
+        </section>
+      )}
+
+      {showCombatReport && result && (
+        <section
+          className={`mt-3 rounded-xl border p-3 ${
+            isVictory
+              ? "border-emerald-500/25 bg-emerald-500/10"
+              : "border-red-500/25 bg-red-500/10"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p
+                className={`text-[9px] font-black uppercase tracking-[0.16em] ${
+                  isVictory
+                    ? "text-emerald-300/80"
+                    : "text-red-300/80"
+                }`}
+              >
+                Résultat du combat
+              </p>
+              <p className="mt-1 text-lg font-black text-white">
+                {isVictory
+                  ? "Victoire"
+                  : "Défaite"}
+              </p>
+            </div>
+
+            <div className="text-right">
+              <p className="text-[9px] font-black uppercase tracking-wide text-zinc-500">
+                Pertes
+              </p>
+              <p className="mt-1 font-black text-white">
+                {formatNumber(lostUnits)} / {formatNumber(initialUnits)}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+            <div className="rounded-lg border border-white/10 bg-black/20 p-2.5">
+              <p className="text-zinc-500">
+                Survivants
+              </p>
+              <p className="mt-1 font-black text-white">
+                {formatNumber(survivingUnits)}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-black/20 p-2.5">
+              <p className="text-zinc-500">
+                Taux de pertes
+              </p>
+              <p className="mt-1 font-black text-white">
+                {result.casualtyPercent} %
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 border-t border-white/10 pt-3">
+            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-amber-300/75">
+              {operation.phase === "returned"
+                ? "Butin récupéré"
+                : "Butin en cours de retour"}
+            </p>
+
+            <ExactRewardLines
+              rewards={result.rewards}
+            />
+          </div>
+        </section>
+      )}
+
+      {operation.phase === "returned" &&
+        !result && (
+          <section className="mt-3 rounded-xl border border-zinc-700 bg-zinc-900/70 p-3 text-xs font-semibold leading-relaxed text-zinc-300">
+            Aucun combat n'a eu lieu. Tous les hommes rappelés ont rejoint la garnison.
+          </section>
+        )}
+
+      {canRecall && (
+        <button
+          type="button"
+          onClick={onRecall}
+          className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
+        >
+          Rappeler l'escouade
+        </button>
+      )}
+
+      {operation.phase === "returned" && (
+        <button
+          type="button"
+          onClick={onCloseReport}
+          className="mt-2 w-full rounded-xl bg-zinc-100 px-3 py-2.5 text-xs font-black text-zinc-950 transition hover:bg-white"
+        >
+          Fermer le rapport
+        </button>
+      )}
     </aside>
+  )
+}
+
+function ExactRewardLines({
+  rewards,
+}: {
+  rewards: NonNullable<
+    WorldOperation["combatResult"]
+  >["rewards"]
+}) {
+  const lines: string[] = []
+
+  if (rewards.money > 0) {
+    lines.push(
+      `💵 +${formatNumber(rewards.money)} argent`
+    )
+  }
+
+  if (rewards.materials > 0) {
+    lines.push(
+      `🧱 +${formatNumber(rewards.materials)} matériaux`
+    )
+  }
+
+  if (rewards.equipment > 0) {
+    lines.push(
+      `🧰 +${formatNumber(rewards.equipment)} équipements`
+    )
+  }
+
+  if (rewards.influence > 0) {
+    lines.push(
+      `⭐ +${formatNumber(rewards.influence)} Influence`
+    )
+  }
+
+  if (rewards.commanderXp > 0) {
+    lines.push(
+      `🧠 +${formatNumber(rewards.commanderXp)} XP commandant`
+    )
+  }
+
+  if (lines.length === 0) {
+    lines.push("Aucun butin récupéré")
+  }
+
+  return (
+    <div className="mt-2 space-y-1 text-xs font-bold text-zinc-300">
+      {lines.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+    </div>
   )
 }
 

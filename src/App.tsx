@@ -777,8 +777,14 @@ export default function App() {
           onBack={
             openCity
           }
+          onGameChanged={
+            loadGame
+          }
           cityId={
             String(data.city.id)
+          }
+          playerId={
+            String(data.player.id)
           }
           buildings={
             data.buildings
