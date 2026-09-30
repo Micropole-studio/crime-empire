@@ -67,10 +67,15 @@ export type WorldNode = {
   imageSrc?: string
   imageAlt?: string
 
-  /* Illustration détourée utilisée directement sur le terrain. */
+  /* Ancien mode : illustration détourée. Conservé pour compatibilité. */
   mapAssetSrc?: string
   mapAssetAlt?: string
   mapAssetWidth?: number
+
+  /* World Map 2.1 : la carte elle-même est cliquable via des hotspots. */
+  hotspotWidth?: number
+  hotspotHeight?: number
+  hotspotRotation?: number
 
   x: number
   y: number

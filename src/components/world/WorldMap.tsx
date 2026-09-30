@@ -231,6 +231,9 @@ export default function WorldMap({
   const suppressNodeClickUntilRef =
     useRef(0)
 
+  const pressedNodeIdRef =
+    useRef<string | null>(null)
+
   const cameraInitializedRef =
     useRef(false)
 
@@ -1412,6 +1415,8 @@ export default function WorldMap({
   ) {
     const target = event.target
 
+    pressedNodeIdRef.current = null
+
     if (
       target instanceof Element &&
       target.closest(
@@ -1419,6 +1424,14 @@ export default function WorldMap({
       )
     ) {
       return
+    }
+
+    if (target instanceof Element) {
+      const nodeTarget = target.closest<HTMLElement>(
+        "[data-world-node-id]"
+      )
+      pressedNodeIdRef.current =
+        nodeTarget?.dataset.worldNodeId ?? null
     }
 
     if (
@@ -1607,6 +1620,19 @@ export default function WorldMap({
 
     setIsMoving(false)
 
+    const pressedNodeId = pressedNodeIdRef.current
+    pressedNodeIdRef.current = null
+
+    if (!gesture.moved && pressedNodeId) {
+      const pressedNode = nodes.find(
+        (node) => node.id === pressedNodeId
+      )
+
+      if (pressedNode) {
+        setSelectedNode(pressedNode)
+      }
+    }
+
     if (gesture.mode === "pan" && gesture.moved) {
       startInertia(
         gesture.velocityX,
@@ -1686,7 +1712,7 @@ export default function WorldMap({
           if (
             target instanceof Element &&
             target.closest(
-              "[data-world-interactive]"
+              "[data-world-interactive], [data-world-node]"
             )
           ) {
             event.preventDefault()
@@ -2109,35 +2135,41 @@ function WorldNodeMarker({
 }: WorldNodeMarkerProps) {
   const isCity = node.type === "player_city"
   const isCurrentCity = node.cityKind === "current"
-  const width = Math.max(
-    8,
-    Math.min(22, node.mapAssetWidth ?? (isCity ? 15 : 12))
+  const hotspotWidth = Math.max(
+    10,
+    Math.min(28, node.hotspotWidth ?? 18)
   )
+  const hotspotHeight = Math.max(
+    9,
+    Math.min(24, node.hotspotHeight ?? 15)
+  )
+  const rotation = node.hotspotRotation ?? 0
 
   const resourceClasses: Record<
     WorldResourceType,
     string
   > = {
     money:
-      "border-emerald-300/55 bg-emerald-950/90 text-emerald-100",
+      "border-emerald-300/60 bg-emerald-950/88 text-emerald-100",
     materials:
-      "border-orange-300/55 bg-orange-950/90 text-orange-100",
+      "border-orange-300/60 bg-orange-950/88 text-orange-100",
     equipment:
-      "border-sky-300/55 bg-sky-950/90 text-sky-100",
+      "border-sky-300/60 bg-sky-950/88 text-sky-100",
     influence:
-      "border-violet-300/55 bg-violet-950/90 text-violet-100",
+      "border-violet-300/60 bg-violet-950/88 text-violet-100",
   }
 
   const labelClass = isCity
     ? isCurrentCity
-      ? "border-amber-300/65 bg-amber-950/92 text-amber-50"
-      : "border-red-300/65 bg-red-950/92 text-red-50"
+      ? "border-amber-300/70 bg-amber-950/90 text-amber-50"
+      : "border-red-300/70 bg-red-950/90 text-red-50"
     : resourceClasses[node.resourceType ?? "money"]
 
   return (
     <button
       type="button"
       data-world-node
+      data-world-node-id={node.id}
       onClick={(event) => {
         event.stopPropagation()
         onSelect()
@@ -2146,44 +2178,31 @@ function WorldNodeMarker({
       style={{
         left: `${node.x}%`,
         top: `${node.y}%`,
-        width: `${width}%`,
-        transform: "translate(-50%, -65%)",
+        width: `${hotspotWidth}%`,
+        height: `${hotspotHeight}%`,
+        transform: "translate(-50%, -50%)",
       }}
       aria-label={`Ouvrir ${node.name}`}
     >
       <span
-        className={`world-node-ground pointer-events-none absolute left-1/2 top-[64%] h-[38%] w-[78%] -translate-x-1/2 rounded-[50%] border transition duration-200 ${
+        className={`world-hotspot-zone pointer-events-none absolute inset-0 rounded-[28%] border-2 transition duration-200 ${
           selected
-            ? "border-white/55 opacity-100"
-            : "border-white/10 opacity-55"
+            ? "is-selected opacity-100"
+            : "opacity-45 group-hover:opacity-100"
+        }`}
+        style={{
+          transform: `rotate(${rotation}deg)`,
+        }}
+      />
+
+      <span
+        className={`world-hotspot-pulse pointer-events-none absolute left-1/2 top-1/2 h-[82%] w-[82%] -translate-x-1/2 -translate-y-1/2 rounded-[30%] ${
+          selected ? "opacity-100" : "opacity-0 group-hover:opacity-60"
         }`}
       />
 
       <span
-        className={`pointer-events-none absolute left-1/2 top-[62%] h-[46%] w-[94%] -translate-x-1/2 rounded-[50%] transition duration-200 ${
-          selected
-            ? "world-node-selected-halo opacity-100"
-            : "opacity-0 group-hover:opacity-70"
-        }`}
-      />
-
-      {node.mapAssetSrc ? (
-        <img
-          src={node.mapAssetSrc}
-          alt={node.mapAssetAlt ?? ""}
-          draggable={false}
-          className={`world-node-asset pointer-events-none relative z-10 block h-auto w-full select-none transition duration-200 ${
-            selected ? "scale-[1.055]" : ""
-          }`}
-        />
-      ) : (
-        <span className="relative z-10 mx-auto flex aspect-square w-1/2 items-center justify-center rounded-2xl border border-white/20 bg-black/75 text-3xl shadow-2xl">
-          {node.icon}
-        </span>
-      )}
-
-      <span
-        className={`pointer-events-none relative z-20 mx-auto -mt-[4%] flex w-max max-w-[150%] items-center gap-2 rounded-lg border px-2.5 py-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.72)] backdrop-blur-md transition duration-200 ${labelClass} ${
+        className={`pointer-events-none absolute left-1/2 top-[88%] z-20 flex w-max max-w-[150%] -translate-x-1/2 items-center gap-2 rounded-lg border px-2.5 py-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.72)] backdrop-blur-md transition duration-200 ${labelClass} ${
           selected ? "scale-105 ring-1 ring-white/35" : ""
         }`}
       >

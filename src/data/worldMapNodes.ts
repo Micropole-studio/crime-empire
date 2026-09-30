@@ -33,8 +33,11 @@ export function createWorldNodes({
       mapAssetAlt: "Villa principale de votre empire",
       mapAssetWidth: 16,
 
-      x: 31,
-      y: 69,
+      x: 23,
+      y: 62,
+      hotspotWidth: 21,
+      hotspotHeight: 18,
+      hotspotRotation: -4,
 
       level:
         Math.max(
@@ -68,8 +71,11 @@ export function createWorldNodes({
       mapAssetAlt: "Villa fortifiée de Port Sombre",
       mapAssetWidth: 14,
 
-      x: 73,
-      y: 27,
+      x: 66,
+      y: 17,
+      hotspotWidth: 19,
+      hotspotHeight: 15,
+      hotspotRotation: 3,
 
       level: 4,
 
@@ -94,8 +100,11 @@ export function createWorldNodes({
       mapAssetAlt: "Planque clandestine du Marché noir",
       mapAssetWidth: 12,
 
-      x: 46,
-      y: 53,
+      x: 18,
+      y: 39,
+      hotspotWidth: 19,
+      hotspotHeight: 17,
+      hotspotRotation: -4,
 
       level: 1,
       recommendedPower: 220,
@@ -139,8 +148,11 @@ export function createWorldNodes({
       mapAssetAlt: "Installation industrielle du Chantier clandestin",
       mapAssetWidth: 13,
 
-      x: 61,
-      y: 72,
+      x: 43,
+      y: 61,
+      hotspotWidth: 20,
+      hotspotHeight: 17,
+      hotspotRotation: -2,
 
       level: 2,
       recommendedPower: 360,
@@ -186,8 +198,11 @@ export function createWorldNodes({
       mapAssetAlt: "Complexe de sécurité du Dépôt d’armes",
       mapAssetWidth: 13,
 
-      x: 81,
-      y: 53,
+      x: 82,
+      y: 49,
+      hotspotWidth: 18,
+      hotspotHeight: 17,
+      hotspotRotation: 4,
 
       level: 3,
       recommendedPower: 560,
@@ -233,8 +248,11 @@ export function createWorldNodes({
       mapAssetAlt: "QG du Réseau des quartiers",
       mapAssetWidth: 12,
 
-      x: 52,
-      y: 29,
+      x: 50,
+      y: 45,
+      hotspotWidth: 20,
+      hotspotHeight: 17,
+      hotspotRotation: 0,
 
       level: 4,
       recommendedPower: 780,
