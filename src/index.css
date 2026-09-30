@@ -111,3 +111,244 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+/* Crime Empire — World Map 2.0 */
+.world-node-asset {
+  filter:
+    drop-shadow(0 18px 14px rgba(0, 0, 0, 0.78))
+    drop-shadow(0 0 8px rgba(0, 0, 0, 0.45));
+  transform-origin: 50% 72%;
+  -webkit-user-drag: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-world-node]:hover .world-node-asset {
+    transform: translateY(-3px) scale(1.045);
+    filter:
+      drop-shadow(0 22px 18px rgba(0, 0, 0, 0.82))
+      drop-shadow(0 0 11px rgba(255, 255, 255, 0.1));
+  }
+}
+
+.world-node-ground {
+  background:
+    radial-gradient(
+      ellipse at center,
+      rgba(0, 0, 0, 0.6) 0%,
+      rgba(0, 0, 0, 0.34) 46%,
+      rgba(0, 0, 0, 0) 74%
+    );
+  filter: blur(2px);
+}
+
+.world-node-selected-halo {
+  background:
+    radial-gradient(
+      ellipse at center,
+      rgba(255, 214, 122, 0.28) 0%,
+      rgba(255, 144, 74, 0.12) 42%,
+      rgba(255, 120, 60, 0) 74%
+    );
+  filter: blur(8px);
+  animation: world-node-halo 1.9s ease-in-out infinite;
+}
+
+.world-fog {
+  position: absolute;
+  display: block;
+  width: 34%;
+  height: 19%;
+  border-radius: 999px;
+  opacity: 0.2;
+  filter: blur(34px);
+  background:
+    radial-gradient(
+      ellipse at center,
+      rgba(195, 215, 226, 0.46),
+      rgba(116, 147, 160, 0.17) 45%,
+      rgba(26, 35, 40, 0) 73%
+    );
+  mix-blend-mode: screen;
+  animation: world-fog-drift 18s ease-in-out infinite alternate;
+}
+
+.world-fog-a {
+  left: -8%;
+  top: 11%;
+}
+
+.world-fog-b {
+  right: -10%;
+  top: 42%;
+  animation-duration: 23s;
+  animation-delay: -7s;
+}
+
+.world-fog-c {
+  left: 23%;
+  bottom: -7%;
+  width: 46%;
+  animation-duration: 27s;
+  animation-delay: -13s;
+}
+
+.world-ambient-glow {
+  position: absolute;
+  display: block;
+  width: 18%;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  opacity: 0.15;
+  filter: blur(30px);
+  mix-blend-mode: screen;
+}
+
+.world-ambient-glow-a {
+  left: 42%;
+  top: 18%;
+  background: rgba(245, 158, 11, 0.33);
+}
+
+.world-ambient-glow-b {
+  right: 5%;
+  bottom: 17%;
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.world-route-shadow {
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 7;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.world-route-line {
+  stroke: rgba(251, 191, 36, 0.92);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 10 10;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.65));
+  animation: world-route-flow 0.9s linear infinite;
+}
+
+.world-route-target-ring {
+  fill: rgba(239, 68, 68, 0.14);
+  stroke: rgba(248, 113, 113, 0.95);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: world-target-pulse 1.4s ease-out infinite;
+}
+
+.world-operation-vehicle {
+  pointer-events: none;
+  transition:
+    left 1s linear,
+    top 1s linear;
+  filter: drop-shadow(0 12px 12px rgba(0, 0, 0, 0.72));
+}
+
+.world-operation-vehicle > img {
+  position: relative;
+  z-index: 2;
+  animation: world-helicopter-float 1.6s ease-in-out infinite;
+}
+
+.world-operation-vehicle-shadow {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: 6%;
+  width: 54%;
+  height: 16%;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.58);
+  filter: blur(6px);
+}
+
+.world-operation-status {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 91%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: rgba(20, 13, 4, 0.9);
+  color: rgb(254, 243, 199);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.55);
+}
+
+.world-operation-status.is-returning {
+  border-color: rgba(147, 197, 253, 0.45);
+  background: rgba(5, 18, 34, 0.9);
+  color: rgb(219, 234, 254);
+}
+
+@keyframes world-node-halo {
+  0%, 100% {
+    transform: translateX(-50%) scale(0.92);
+    opacity: 0.52;
+  }
+  50% {
+    transform: translateX(-50%) scale(1.08);
+    opacity: 0.95;
+  }
+}
+
+@keyframes world-fog-drift {
+  from {
+    transform: translate3d(-4%, -2%, 0) scale(0.96);
+  }
+  to {
+    transform: translate3d(10%, 5%, 0) scale(1.08);
+  }
+}
+
+@keyframes world-route-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+@keyframes world-target-pulse {
+  0% {
+    transform: scale(0.72);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes world-helicopter-float {
+  0%, 100% {
+    transform: translateY(-2px) rotate(-0.6deg);
+  }
+  50% {
+    transform: translateY(3px) rotate(0.6deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-node-selected-halo,
+  .world-fog,
+  .world-route-line,
+  .world-route-target-ring,
+  .world-operation-vehicle > img {
+    animation: none !important;
+  }
+
+  .world-operation-vehicle {
+    transition: none !important;
+  }
+}

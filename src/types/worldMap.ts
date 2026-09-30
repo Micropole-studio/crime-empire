@@ -67,6 +67,11 @@ export type WorldNode = {
   imageSrc?: string
   imageAlt?: string
 
+  /* Illustration détourée utilisée directement sur le terrain. */
+  mapAssetSrc?: string
+  mapAssetAlt?: string
+  mapAssetWidth?: number
+
   x: number
   y: number
 

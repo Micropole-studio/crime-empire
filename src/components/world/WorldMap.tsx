@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -104,17 +105,18 @@ type WorldSize = {
   height: number
 }
 
-type GestureState =
-  | {
-      mode: "none"
-      moved: false
-    }
-  | {
-      mode: "pan"
-      moved: boolean
-      startPointer: Point
-      startCamera: Camera
-    }
+type GestureState = {
+  mode: "none" | "pan" | "pinch"
+  moved: boolean
+  startCamera: Camera
+  startCentroid: Point
+  startDistance: number
+  anchorWorld: Point
+  lastCentroid: Point
+  lastTimestamp: number
+  velocityX: number
+  velocityY: number
+}
 
 const DEFAULT_WORLD_SIZE:
   WorldSize = {
@@ -210,15 +212,40 @@ export default function WorldMap({
       null
     )
 
-  const pointerRef =
-    useRef<Point | null>(
+  const cameraLayerRef =
+    useRef<HTMLDivElement | null>(
       null
     )
+
+  const activePointersRef =
+    useRef<Map<number, Point>>(
+      new Map()
+    )
+
+  const inertiaFrameRef =
+    useRef<number | null>(null)
+
+  const settleFrameRef =
+    useRef<number | null>(null)
+
+  const suppressNodeClickUntilRef =
+    useRef(0)
+
+  const cameraInitializedRef =
+    useRef(false)
 
   const gestureRef =
     useRef<GestureState>({
       mode: "none",
       moved: false,
+      startCamera: { x: 0, y: 0, scale: 1 },
+      startCentroid: { x: 0, y: 0 },
+      startDistance: 0,
+      anchorWorld: { x: 0, y: 0 },
+      lastCentroid: { x: 0, y: 0 },
+      lastTimestamp: 0,
+      velocityX: 0,
+      velocityY: 0,
     })
 
   const cameraRef =
@@ -227,15 +254,6 @@ export default function WorldMap({
       y: 0,
       scale: 1,
     })
-
-  const [
-    camera,
-    setCamera,
-  ] = useState<Camera>({
-    x: 0,
-    y: 0,
-    scale: 1,
-  })
 
   const [
     worldSize,
@@ -831,8 +849,11 @@ export default function WorldMap({
           Math.max(
             0.05,
             isMobile
-              ? coverScale
-              : containScale
+              ? coverScale * 1.18
+              : Math.max(
+                  containScale,
+                  coverScale * 0.94
+                )
           ),
       }
     }, [
@@ -840,166 +861,347 @@ export default function WorldMap({
       worldSize.width,
     ])
 
-  const clampCamera =
+  const getCameraBounds =
     useCallback(
-      (
-        candidate: Camera
-      ): Camera => {
-        const viewport =
-          viewportRef.current
+      (scale: number) => {
+        const viewport = viewportRef.current
 
         if (!viewport) {
-          return candidate
+          return {
+            minX: 0,
+            maxX: 0,
+            minY: 0,
+            maxY: 0,
+          }
         }
 
+        const scaledWidth = worldSize.width * scale
+        const scaledHeight = worldSize.height * scale
+        const viewportWidth = viewport.clientWidth
+        const viewportHeight = viewport.clientHeight
+
+        const minX =
+          scaledWidth <= viewportWidth
+            ? (viewportWidth - scaledWidth) / 2
+            : viewportWidth - scaledWidth
+
+        const maxX =
+          scaledWidth <= viewportWidth
+            ? minX
+            : 0
+
+        const minY =
+          scaledHeight <= viewportHeight
+            ? (viewportHeight - scaledHeight) / 2
+            : viewportHeight - scaledHeight
+
+        const maxY =
+          scaledHeight <= viewportHeight
+            ? minY
+            : 0
+
+        return {
+          minX,
+          maxX,
+          minY,
+          maxY,
+        }
+      },
+      [worldSize.height, worldSize.width]
+    )
+
+  const clampCamera =
+    useCallback(
+      (candidate: Camera): Camera => {
         const {
           minimum,
           maximum,
-        } =
-          getScaleLimits()
+        } = getScaleLimits()
 
-        const scale =
-          Math.min(
-            maximum,
-            Math.max(
-              minimum,
-              candidate.scale
-            )
-          )
+        const scale = Math.min(
+          maximum,
+          Math.max(minimum, candidate.scale)
+        )
 
-        const viewportWidth =
-          viewport.clientWidth
-
-        const viewportHeight =
-          viewport.clientHeight
-
-        const scaledWidth =
-          worldSize.width *
-          scale
-
-        const scaledHeight =
-          worldSize.height *
-          scale
-
-        let x =
-          candidate.x
-
-        let y =
-          candidate.y
-
-        if (
-          scaledWidth <=
-          viewportWidth
-        ) {
-          x =
-            (
-              viewportWidth -
-              scaledWidth
-            ) /
-            2
-        } else {
-          x =
-            Math.min(
-              0,
-              Math.max(
-                viewportWidth -
-                  scaledWidth,
-                x
-              )
-            )
-        }
-
-        if (
-          scaledHeight <=
-          viewportHeight
-        ) {
-          y =
-            (
-              viewportHeight -
-              scaledHeight
-            ) /
-            2
-        } else {
-          y =
-            Math.min(
-              0,
-              Math.max(
-                viewportHeight -
-                  scaledHeight,
-                y
-              )
-            )
-        }
+        const bounds = getCameraBounds(scale)
 
         return {
-          x,
-          y,
           scale,
+          x: Math.min(
+            bounds.maxX,
+            Math.max(bounds.minX, candidate.x)
+          ),
+          y: Math.min(
+            bounds.maxY,
+            Math.max(bounds.minY, candidate.y)
+          ),
         }
       },
-      [
-        getScaleLimits,
-        worldSize.height,
-        worldSize.width,
-      ]
+      [getCameraBounds, getScaleLimits]
     )
+
+  const softenAxis = useCallback(
+    (
+      value: number,
+      minimum: number,
+      maximum: number,
+      resistance = 0.28,
+      maxOverscroll = 88
+    ) => {
+      if (value < minimum) {
+        return minimum - Math.min(
+          maxOverscroll,
+          (minimum - value) * resistance
+        )
+      }
+
+      if (value > maximum) {
+        return maximum + Math.min(
+          maxOverscroll,
+          (value - maximum) * resistance
+        )
+      }
+
+      return value
+    },
+    []
+  )
+
+  const softenCamera =
+    useCallback(
+      (candidate: Camera): Camera => {
+        const {
+          minimum,
+          maximum,
+        } = getScaleLimits()
+
+        const scale = Math.min(
+          maximum,
+          Math.max(minimum, candidate.scale)
+        )
+
+        const bounds = getCameraBounds(scale)
+
+        return {
+          scale,
+          x: softenAxis(
+            candidate.x,
+            bounds.minX,
+            bounds.maxX
+          ),
+          y: softenAxis(
+            candidate.y,
+            bounds.minY,
+            bounds.maxY
+          ),
+        }
+      },
+      [getCameraBounds, getScaleLimits, softenAxis]
+    )
+
+  const writeCameraTransform =
+    useCallback((next: Camera) => {
+      const layer = cameraLayerRef.current
+
+      if (!layer) {
+        return
+      }
+
+      layer.style.transform =
+        `translate3d(${next.x}px, ${next.y}px, 0) scale(${next.scale})`
+    }, [])
 
   const updateCamera =
     useCallback(
       (
-        candidate: Camera
+        candidate: Camera,
+        options?: {
+          soft?: boolean
+        }
       ) => {
-        const next =
-          clampCamera(
-            candidate
+        const next = options?.soft
+          ? softenCamera(candidate)
+          : clampCamera(candidate)
+
+        cameraRef.current = next
+        writeCameraTransform(next)
+
+        return next
+      },
+      [clampCamera, softenCamera, writeCameraTransform]
+    )
+
+  const stopCameraAnimation =
+    useCallback(() => {
+      if (inertiaFrameRef.current !== null) {
+        window.cancelAnimationFrame(
+          inertiaFrameRef.current
+        )
+        inertiaFrameRef.current = null
+      }
+
+      if (settleFrameRef.current !== null) {
+        window.cancelAnimationFrame(
+          settleFrameRef.current
+        )
+        settleFrameRef.current = null
+      }
+    }, [])
+
+  const settleCamera =
+    useCallback(() => {
+      if (settleFrameRef.current !== null) {
+        window.cancelAnimationFrame(
+          settleFrameRef.current
+        )
+      }
+
+      const from = cameraRef.current
+      const target = clampCamera(from)
+
+      const distance = Math.hypot(
+        target.x - from.x,
+        target.y - from.y,
+        (target.scale - from.scale) * 180
+      )
+
+      if (distance < 0.5) {
+        updateCamera(target)
+        return
+      }
+
+      const startedAt = performance.now()
+      const duration = 220
+
+      const step = (timestamp: number) => {
+        const progress = Math.min(
+          1,
+          (timestamp - startedAt) / duration
+        )
+
+        const eased = 1 - Math.pow(1 - progress, 3)
+
+        const next = {
+          x: from.x + (target.x - from.x) * eased,
+          y: from.y + (target.y - from.y) * eased,
+          scale:
+            from.scale +
+            (target.scale - from.scale) * eased,
+        }
+
+        cameraRef.current = next
+        writeCameraTransform(next)
+
+        if (progress < 1) {
+          settleFrameRef.current =
+            window.requestAnimationFrame(step)
+        } else {
+          settleFrameRef.current = null
+          updateCamera(target)
+        }
+      }
+
+      settleFrameRef.current =
+        window.requestAnimationFrame(step)
+    }, [clampCamera, updateCamera, writeCameraTransform])
+
+  const startInertia =
+    useCallback(
+      (velocityX: number, velocityY: number) => {
+        stopCameraAnimation()
+
+        let vx = velocityX
+        let vy = velocityY
+        let lastTimestamp = performance.now()
+
+        if (Math.hypot(vx, vy) < 0.035) {
+          settleCamera()
+          return
+        }
+
+        const step = (timestamp: number) => {
+          const deltaMs = Math.min(
+            34,
+            Math.max(1, timestamp - lastTimestamp)
+          )
+          lastTimestamp = timestamp
+
+          const current = cameraRef.current
+          const candidate = {
+            ...current,
+            x: current.x + vx * deltaMs,
+            y: current.y + vy * deltaMs,
+          }
+
+          const next = updateCamera(candidate, {
+            soft: true,
+          })
+
+          const hard = clampCamera(next)
+          const hitHorizontalEdge =
+            Math.abs(next.x - hard.x) > 0.5
+          const hitVerticalEdge =
+            Math.abs(next.y - hard.y) > 0.5
+
+          if (hitHorizontalEdge) {
+            vx *= 0.68
+          }
+
+          if (hitVerticalEdge) {
+            vy *= 0.68
+          }
+
+          const friction = Math.pow(
+            0.91,
+            deltaMs / 16.67
           )
 
-        cameraRef.current =
-          next
+          vx *= friction
+          vy *= friction
 
-        setCamera(
-          next
-        )
+          if (Math.hypot(vx, vy) > 0.018) {
+            inertiaFrameRef.current =
+              window.requestAnimationFrame(step)
+          } else {
+            inertiaFrameRef.current = null
+            settleCamera()
+          }
+        }
+
+        inertiaFrameRef.current =
+          window.requestAnimationFrame(step)
       },
-      [clampCamera]
+      [clampCamera, settleCamera, stopCameraAnimation, updateCamera]
     )
 
   const resetCamera =
     useCallback(() => {
-      const viewport =
-        viewportRef.current
+      const viewport = viewportRef.current
 
       if (!viewport) {
         return
       }
 
-      const {
-        initial,
-      } =
-        getScaleLimits()
+      stopCameraAnimation()
+
+      const { initial } = getScaleLimits()
 
       updateCamera({
-        scale:
-          initial,
-
+        scale: initial,
         x:
-          (
-            viewport.clientWidth -
-            worldSize.width *
-              initial
-          ) /
+          (viewport.clientWidth -
+            worldSize.width * initial) /
           2,
-
         y:
-          (
-            viewport.clientHeight -
-            worldSize.height *
-              initial
-          ) /
+          (viewport.clientHeight -
+            worldSize.height * initial) /
           2,
       })
+
+      cameraInitializedRef.current = true
     }, [
       getScaleLimits,
+      stopCameraAnimation,
       updateCamera,
       worldSize.height,
       worldSize.width,
@@ -1009,110 +1211,206 @@ export default function WorldMap({
     useCallback(
       (
         targetScale: number,
-        viewportPoint: Point
+        viewportPoint: Point,
+        soft = false
       ) => {
-        const current =
-          cameraRef.current
-
+        const current = cameraRef.current
         const worldPoint = {
           x:
-            (
-              viewportPoint.x -
-              current.x
-            ) /
+            (viewportPoint.x - current.x) /
             current.scale,
-
           y:
-            (
-              viewportPoint.y -
-              current.y
-            ) /
+            (viewportPoint.y - current.y) /
             current.scale,
         }
 
-        updateCamera({
-          scale:
-            targetScale,
-
-          x:
-            viewportPoint.x -
-            worldPoint.x *
-              targetScale,
-
-          y:
-            viewportPoint.y -
-            worldPoint.y *
-              targetScale,
-        })
+        updateCamera(
+          {
+            scale: targetScale,
+            x:
+              viewportPoint.x -
+              worldPoint.x * targetScale,
+            y:
+              viewportPoint.y -
+              worldPoint.y * targetScale,
+          },
+          { soft }
+        )
       },
       [updateCamera]
     )
 
   const zoomBy =
     useCallback(
-      (
-        multiplier: number
-      ) => {
-        const viewport =
-          viewportRef.current
+      (multiplier: number) => {
+        const viewport = viewportRef.current
 
         if (!viewport) {
           return
         }
 
-        zoomAtPoint(
-          cameraRef.current.scale *
-            multiplier,
-          {
-            x:
-              viewport.clientWidth /
-              2,
+        stopCameraAnimation()
 
-            y:
-              viewport.clientHeight /
-              2,
+        zoomAtPoint(
+          cameraRef.current.scale * multiplier,
+          {
+            x: viewport.clientWidth / 2,
+            y: viewport.clientHeight / 2,
           }
         )
       },
-      [zoomAtPoint]
+      [stopCameraAnimation, zoomAtPoint]
     )
 
   useEffect(() => {
-    const viewport =
-      viewportRef.current
+    const viewport = viewportRef.current
 
     if (!viewport) {
       return
     }
 
-    const observer =
-      new ResizeObserver(() => {
+    const observer = new ResizeObserver(() => {
+      if (!cameraInitializedRef.current) {
         resetCamera()
-      })
+        return
+      }
 
-    observer.observe(
-      viewport
-    )
+      updateCamera(cameraRef.current)
+    })
+
+    observer.observe(viewport)
 
     return () => {
       observer.disconnect()
     }
-  }, [resetCamera])
+  }, [resetCamera, updateCamera])
 
-  useEffect(() => {
-    resetCamera()
+  useLayoutEffect(() => {
+    if (!cameraInitializedRef.current) {
+      resetCamera()
+      return
+    }
+
+    updateCamera(cameraRef.current)
   }, [
     resetCamera,
+    updateCamera,
     worldSize.height,
     worldSize.width,
   ])
 
+  useEffect(
+    () => () => {
+      stopCameraAnimation()
+    },
+    [stopCameraAnimation]
+  )
+
+  function getViewportPoint(
+    event: ReactPointerEvent<HTMLDivElement>
+  ): Point {
+    const viewport = viewportRef.current
+
+    if (!viewport) {
+      return {
+        x: event.clientX,
+        y: event.clientY,
+      }
+    }
+
+    const rect = viewport.getBoundingClientRect()
+
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    }
+  }
+
+  function getPointerPair() {
+    const pointers = Array.from(
+      activePointersRef.current.values()
+    )
+
+    if (pointers.length < 2) {
+      return null
+    }
+
+    const first = pointers[0]
+    const second = pointers[1]
+
+    const centroid = {
+      x: (first.x + second.x) / 2,
+      y: (first.y + second.y) / 2,
+    }
+
+    const distance = Math.max(
+      1,
+      Math.hypot(
+        second.x - first.x,
+        second.y - first.y
+      )
+    )
+
+    return {
+      centroid,
+      distance,
+    }
+  }
+
+  function beginPan(point: Point) {
+    const now = performance.now()
+
+    gestureRef.current = {
+      mode: "pan",
+      moved: false,
+      startCamera: { ...cameraRef.current },
+      startCentroid: point,
+      startDistance: 0,
+      anchorWorld: { x: 0, y: 0 },
+      lastCentroid: point,
+      lastTimestamp: now,
+      velocityX: 0,
+      velocityY: 0,
+    }
+  }
+
+  function beginPinch() {
+    const pair = getPointerPair()
+
+    if (!pair) {
+      return
+    }
+
+    const current = cameraRef.current
+    const now = performance.now()
+
+    gestureRef.current = {
+      mode: "pinch",
+      moved: true,
+      startCamera: { ...current },
+      startCentroid: pair.centroid,
+      startDistance: pair.distance,
+      anchorWorld: {
+        x:
+          (pair.centroid.x - current.x) /
+          current.scale,
+        y:
+          (pair.centroid.y - current.y) /
+          current.scale,
+      },
+      lastCentroid: pair.centroid,
+      lastTimestamp: now,
+      velocityX: 0,
+      velocityY: 0,
+    }
+
+    setIsMoving(true)
+  }
+
   function handlePointerDown(
-    event:
-      ReactPointerEvent<HTMLDivElement>
+    event: ReactPointerEvent<HTMLDivElement>
   ) {
-    const target =
-      event.target
+    const target = event.target
 
     if (
       target instanceof Element &&
@@ -1124,144 +1422,224 @@ export default function WorldMap({
     }
 
     if (
-      event.pointerType ===
-        "mouse" &&
+      event.pointerType === "mouse" &&
       event.button !== 0
     ) {
       return
     }
 
-    const viewport =
-      viewportRef.current
+    const viewport = viewportRef.current
 
     if (!viewport) {
       return
     }
 
-    viewport.setPointerCapture(
-      event.pointerId
+    stopCameraAnimation()
+
+    viewport.setPointerCapture(event.pointerId)
+
+    const point = getViewportPoint(event)
+    activePointersRef.current.set(
+      event.pointerId,
+      point
     )
 
-    const point = {
-      x:
-        event.clientX,
-
-      y:
-        event.clientY,
-    }
-
-    pointerRef.current =
-      point
-
-    gestureRef.current = {
-      mode: "pan",
-      moved: false,
-      startPointer:
-        point,
-      startCamera:
-        cameraRef.current,
+    if (activePointersRef.current.size >= 2) {
+      beginPinch()
+    } else {
+      beginPan(point)
     }
   }
 
   function handlePointerMove(
-    event:
-      ReactPointerEvent<HTMLDivElement>
+    event: ReactPointerEvent<HTMLDivElement>
   ) {
-    const gesture =
-      gestureRef.current
-
     if (
-      gesture.mode !==
-      "pan"
+      !activePointersRef.current.has(
+        event.pointerId
+      )
     ) {
       return
     }
 
-    const deltaX =
-      event.clientX -
-      gesture.startPointer.x
+    const point = getViewportPoint(event)
+    activePointersRef.current.set(
+      event.pointerId,
+      point
+    )
 
+    if (activePointersRef.current.size >= 2) {
+      if (gestureRef.current.mode !== "pinch") {
+        beginPinch()
+      }
+
+      const pair = getPointerPair()
+      const gesture = gestureRef.current
+
+      if (!pair || gesture.mode !== "pinch") {
+        return
+      }
+
+      const ratio =
+        pair.distance / gesture.startDistance
+      const targetScale =
+        gesture.startCamera.scale * ratio
+
+      updateCamera(
+        {
+          scale: targetScale,
+          x:
+            pair.centroid.x -
+            gesture.anchorWorld.x * targetScale,
+          y:
+            pair.centroid.y -
+            gesture.anchorWorld.y * targetScale,
+        },
+        { soft: true }
+      )
+
+      gestureRef.current = {
+        ...gesture,
+        moved: true,
+        lastCentroid: pair.centroid,
+        lastTimestamp: performance.now(),
+      }
+
+      setIsMoving(true)
+      return
+    }
+
+    const gesture = gestureRef.current
+
+    if (gesture.mode !== "pan") {
+      beginPan(point)
+      return
+    }
+
+    const deltaX =
+      point.x - gesture.startCentroid.x
     const deltaY =
-      event.clientY -
-      gesture.startPointer.y
+      point.y - gesture.startCentroid.y
 
     const moved =
       gesture.moved ||
-      Math.hypot(
-        deltaX,
-        deltaY
-      ) >
-        5
+      Math.hypot(deltaX, deltaY) > 5
+
+    const now = performance.now()
+    const elapsed = Math.max(
+      1,
+      now - gesture.lastTimestamp
+    )
+
+    const instantVelocityX =
+      (point.x - gesture.lastCentroid.x) /
+      elapsed
+    const instantVelocityY =
+      (point.y - gesture.lastCentroid.y) /
+      elapsed
+
+    const velocityX =
+      gesture.velocityX * 0.58 +
+      instantVelocityX * 0.42
+    const velocityY =
+      gesture.velocityY * 0.58 +
+      instantVelocityY * 0.42
+
+    updateCamera(
+      {
+        ...gesture.startCamera,
+        x: gesture.startCamera.x + deltaX,
+        y: gesture.startCamera.y + deltaY,
+      },
+      { soft: true }
+    )
 
     gestureRef.current = {
       ...gesture,
       moved,
+      lastCentroid: point,
+      lastTimestamp: now,
+      velocityX,
+      velocityY,
     }
 
     if (moved) {
-      setIsMoving(
-        true
-      )
+      setIsMoving(true)
     }
-
-    updateCamera({
-      ...gesture.startCamera,
-
-      x:
-        gesture.startCamera.x +
-        deltaX,
-
-      y:
-        gesture.startCamera.y +
-        deltaY,
-    })
   }
 
-  function finishPointer() {
-    pointerRef.current =
-      null
+  function finishPointer(
+    event?: ReactPointerEvent<HTMLDivElement>
+  ) {
+    if (event) {
+      activePointersRef.current.delete(
+        event.pointerId
+      )
+    } else {
+      activePointersRef.current.clear()
+    }
+
+    const gesture = gestureRef.current
+
+    if (gesture.moved) {
+      suppressNodeClickUntilRef.current =
+        performance.now() + 180
+    }
+
+    if (activePointersRef.current.size >= 2) {
+      beginPinch()
+      return
+    }
+
+    if (activePointersRef.current.size === 1) {
+      const remainingPoint = Array.from(
+        activePointersRef.current.values()
+      )[0]
+      beginPan(remainingPoint)
+      return
+    }
 
     gestureRef.current = {
+      ...gesture,
       mode: "none",
       moved: false,
     }
 
-    setIsMoving(
-      false
-    )
+    setIsMoving(false)
+
+    if (gesture.mode === "pan" && gesture.moved) {
+      startInertia(
+        gesture.velocityX,
+        gesture.velocityY
+      )
+    } else {
+      settleCamera()
+    }
   }
 
   function handleWheel(
-    event:
-      ReactWheelEvent<HTMLDivElement>
+    event: ReactWheelEvent<HTMLDivElement>
   ) {
     event.preventDefault()
 
-    const viewport =
-      viewportRef.current
+    const viewport = viewportRef.current
 
     if (!viewport) {
       return
     }
 
-    const rect =
-      viewport.getBoundingClientRect()
+    stopCameraAnimation()
+
+    const rect = viewport.getBoundingClientRect()
+    const zoomFactor = Math.exp(
+      -event.deltaY * 0.00135
+    )
 
     zoomAtPoint(
-      cameraRef.current.scale *
-        (
-          event.deltaY < 0
-            ? 1.12
-            : 0.89
-        ),
+      cameraRef.current.scale * zoomFactor,
       {
-        x:
-          event.clientX -
-          rect.left,
-
-        y:
-          event.clientY -
-          rect.top,
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
       }
     )
   }
@@ -1278,8 +1656,10 @@ export default function WorldMap({
             : "cursor-grab"
         }`}
         style={{
-          touchAction:
-            "none",
+          touchAction: "none",
+          overscrollBehavior: "none",
+          WebkitUserSelect: "none",
+          userSelect: "none",
         }}
         onPointerDown={
           handlePointerDown
@@ -1332,18 +1712,12 @@ export default function WorldMap({
         }}
       >
         <div
+          ref={cameraLayerRef}
           className="absolute left-0 top-0 will-change-transform"
           style={{
-            width:
-              worldSize.width,
-
-            height:
-              worldSize.height,
-
-            transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})`,
-
-            transformOrigin:
-              "0 0",
+            width: worldSize.width,
+            height: worldSize.height,
+            transformOrigin: "0 0",
           }}
         >
           <img
@@ -1379,6 +1753,17 @@ export default function WorldMap({
 
           <div className="pointer-events-none absolute inset-0 bg-black/10" />
 
+          <WorldAtmosphere />
+
+          {activeOperation && (
+            <WorldOperationRoute
+              operation={activeOperation}
+              nodes={nodes}
+              currentTime={currentTime}
+              worldSize={worldSize}
+            />
+          )}
+
           {nodes.map(
             (node) => (
               <WorldNodeMarker
@@ -1392,11 +1777,16 @@ export default function WorldMap({
                   selectedNode?.id ===
                   node.id
                 }
-                onSelect={() =>
-                  setSelectedNode(
-                    node
-                  )
-                }
+                onSelect={() => {
+                  if (
+                    performance.now() <
+                    suppressNodeClickUntilRef.current
+                  ) {
+                    return
+                  }
+
+                  setSelectedNode(node)
+                }}
               />
             )
           )}
@@ -1471,7 +1861,7 @@ export default function WorldMap({
       </div>
 
       <div className="pointer-events-none absolute bottom-3 left-3 z-20 hidden rounded-full border border-white/10 bg-black/70 px-3 py-1.5 text-[10px] font-bold text-white/80 backdrop-blur sm:block">
-        Glisser pour explorer • molette pour zoomer
+        Glisser pour explorer • pincer à 2 doigts pour zoomer • relâcher pour l'inertie
       </div>
 
       {activeOperation && (
@@ -1539,6 +1929,173 @@ export default function WorldMap({
   )
 }
 
+type WorldOperationRouteProps = {
+  operation: WorldOperation
+  nodes: WorldNode[]
+  currentTime: number
+  worldSize: WorldSize
+}
+
+function clamp01(value: number) {
+  return Math.min(1, Math.max(0, value))
+}
+
+function parseTime(value?: string) {
+  if (!value) {
+    return null
+  }
+
+  const timestamp = new Date(value).getTime()
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
+function WorldOperationRoute({
+  operation,
+  nodes,
+  currentTime,
+  worldSize,
+}: WorldOperationRouteProps) {
+  const origin = nodes.find(
+    (node) =>
+      node.type === "player_city" &&
+      node.cityKind === "current"
+  )
+  const target = nodes.find(
+    (node) => node.id === operation.targetNodeId
+  )
+
+  if (!origin || !target) {
+    return null
+  }
+
+  const x1 = (origin.x / 100) * worldSize.width
+  const y1 = (origin.y / 100) * worldSize.height
+  const x2 = (target.x / 100) * worldSize.width
+  const y2 = (target.y / 100) * worldSize.height
+
+  let progress = 0
+  let returning = false
+
+  if (operation.phase === "outbound") {
+    const startedAt = parseTime(operation.startedAt)
+    const arrivalAt = parseTime(operation.arrivalAt)
+
+    if (startedAt !== null && arrivalAt !== null) {
+      progress = clamp01(
+        (currentTime - startedAt) /
+          Math.max(1, arrivalAt - startedAt)
+      )
+    }
+  } else if (
+    operation.phase === "ready" ||
+    operation.phase === "assault_preparation"
+  ) {
+    progress = 1
+  } else if (operation.phase === "returning") {
+    returning = true
+
+    const returnStartedAt = parseTime(
+      operation.returnStartedAt
+    )
+    const returnAt = parseTime(operation.returnAt)
+
+    let startProgress = 1
+
+    if (operation.recalledAt) {
+      const recalledAt = parseTime(operation.recalledAt)
+      const startedAt = parseTime(operation.startedAt)
+
+      if (recalledAt !== null && startedAt !== null) {
+        startProgress = clamp01(
+          (recalledAt - startedAt) /
+            Math.max(1000, operation.travelSeconds * 1000)
+        )
+      }
+    }
+
+    if (returnStartedAt !== null && returnAt !== null) {
+      const returnProgress = clamp01(
+        (currentTime - returnStartedAt) /
+          Math.max(1, returnAt - returnStartedAt)
+      )
+      progress = startProgress * (1 - returnProgress)
+    } else {
+      progress = startProgress
+    }
+  }
+
+  const currentX = x1 + (x2 - x1) * progress
+  const currentY = y1 + (y2 - y1) * progress
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[8]">
+      <svg
+        className="absolute inset-0 h-full w-full overflow-visible"
+        viewBox={`0 0 ${worldSize.width} ${worldSize.height}`}
+        aria-hidden="true"
+      >
+        <line
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          className="world-route-shadow"
+        />
+        <line
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          className="world-route-line"
+        />
+        <circle
+          cx={x2}
+          cy={y2}
+          r="13"
+          className="world-route-target-ring"
+        />
+      </svg>
+
+      <div
+        className="world-operation-vehicle absolute z-20"
+        style={{
+          left: currentX,
+          top: currentY,
+          width: `${Math.max(72, worldSize.width * 0.075)}px`,
+          transform: "translate(-50%, -56%)",
+        }}
+      >
+        <img
+          src="/world/helicopter.png"
+          alt=""
+          draggable={false}
+          className="h-auto w-full select-none"
+        />
+        <span className="world-operation-vehicle-shadow" />
+        <span
+          className={`world-operation-status ${
+            returning ? "is-returning" : ""
+          }`}
+        >
+          {returning ? "RETOUR" : "EN ROUTE"}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function WorldAtmosphere() {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
+      <span className="world-fog world-fog-a" />
+      <span className="world-fog world-fog-b" />
+      <span className="world-fog world-fog-c" />
+      <span className="world-ambient-glow world-ambient-glow-a" />
+      <span className="world-ambient-glow world-ambient-glow-b" />
+    </div>
+  )
+}
+
 type WorldNodeMarkerProps = {
   node: WorldNode
   selected: boolean
@@ -1550,111 +2107,102 @@ function WorldNodeMarker({
   selected,
   onSelect,
 }: WorldNodeMarkerProps) {
-  const isCity =
-    node.type ===
-    "player_city"
+  const isCity = node.type === "player_city"
+  const isCurrentCity = node.cityKind === "current"
+  const width = Math.max(
+    8,
+    Math.min(22, node.mapAssetWidth ?? (isCity ? 15 : 12))
+  )
 
-  const isCurrentCity =
-    node.cityKind ===
-    "current"
+  const resourceClasses: Record<
+    WorldResourceType,
+    string
+  > = {
+    money:
+      "border-emerald-300/55 bg-emerald-950/90 text-emerald-100",
+    materials:
+      "border-orange-300/55 bg-orange-950/90 text-orange-100",
+    equipment:
+      "border-sky-300/55 bg-sky-950/90 text-sky-100",
+    influence:
+      "border-violet-300/55 bg-violet-950/90 text-violet-100",
+  }
 
-  const resourceClasses:
-    Record<
-      WorldResourceType,
-      string
-    > = {
-      money:
-        "border-green-300/70 bg-green-950/85 shadow-[0_0_22px_rgba(34,197,94,0.55)]",
-
-      materials:
-        "border-orange-300/70 bg-orange-950/85 shadow-[0_0_22px_rgba(249,115,22,0.55)]",
-
-      equipment:
-        "border-blue-300/70 bg-blue-950/85 shadow-[0_0_22px_rgba(59,130,246,0.55)]",
-
-      influence:
-        "border-purple-300/70 bg-purple-950/85 shadow-[0_0_22px_rgba(168,85,247,0.55)]",
-    }
-
-  const markerClasses =
-    isCity
-      ? isCurrentCity
-        ? "border-amber-300/80 bg-amber-950/90 shadow-[0_0_26px_rgba(251,191,36,0.65)]"
-        : "border-red-300/80 bg-red-950/90 shadow-[0_0_26px_rgba(239,68,68,0.6)]"
-      : resourceClasses[
-          node.resourceType ??
-          "money"
-        ]
+  const labelClass = isCity
+    ? isCurrentCity
+      ? "border-amber-300/65 bg-amber-950/92 text-amber-50"
+      : "border-red-300/65 bg-red-950/92 text-red-50"
+    : resourceClasses[node.resourceType ?? "money"]
 
   return (
     <button
       type="button"
-      data-world-interactive
-      onPointerDown={(
-        event
-      ) => {
-        event.stopPropagation()
-      }}
-      onDoubleClick={(
-        event
-      ) => {
-        event.preventDefault()
-        event.stopPropagation()
-      }}
-      onClick={(
-        event
-      ) => {
+      data-world-node
+      onClick={(event) => {
         event.stopPropagation()
         onSelect()
       }}
-      className="group absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer border-0 bg-transparent p-0"
+      className="group absolute z-10 border-0 bg-transparent p-0 text-left outline-none"
       style={{
-        left:
-          `${node.x}%`,
-
-        top:
-          `${node.y}%`,
+        left: `${node.x}%`,
+        top: `${node.y}%`,
+        width: `${width}%`,
+        transform: "translate(-50%, -65%)",
       }}
       aria-label={`Ouvrir ${node.name}`}
     >
       <span
-        className={`pointer-events-none absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full border border-white/15 ${
+        className={`world-node-ground pointer-events-none absolute left-1/2 top-[64%] h-[38%] w-[78%] -translate-x-1/2 rounded-[50%] border transition duration-200 ${
           selected
-            ? "opacity-100"
-            : "opacity-45"
+            ? "border-white/55 opacity-100"
+            : "border-white/10 opacity-55"
         }`}
       />
 
       <span
-        className={`relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border-2 p-0 text-2xl backdrop-blur transition duration-200 group-hover:scale-110 ${
+        className={`pointer-events-none absolute left-1/2 top-[62%] h-[46%] w-[94%] -translate-x-1/2 rounded-[50%] transition duration-200 ${
           selected
-            ? "scale-110 ring-2 ring-white/80"
-            : ""
-        } ${markerClasses}`}
+            ? "world-node-selected-halo opacity-100"
+            : "opacity-0 group-hover:opacity-70"
+        }`}
+      />
+
+      {node.mapAssetSrc ? (
+        <img
+          src={node.mapAssetSrc}
+          alt={node.mapAssetAlt ?? ""}
+          draggable={false}
+          className={`world-node-asset pointer-events-none relative z-10 block h-auto w-full select-none transition duration-200 ${
+            selected ? "scale-[1.055]" : ""
+          }`}
+        />
+      ) : (
+        <span className="relative z-10 mx-auto flex aspect-square w-1/2 items-center justify-center rounded-2xl border border-white/20 bg-black/75 text-3xl shadow-2xl">
+          {node.icon}
+        </span>
+      )}
+
+      <span
+        className={`pointer-events-none relative z-20 mx-auto -mt-[4%] flex w-max max-w-[150%] items-center gap-2 rounded-lg border px-2.5 py-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.72)] backdrop-blur-md transition duration-200 ${labelClass} ${
+          selected ? "scale-105 ring-1 ring-white/35" : ""
+        }`}
       >
-        {node.imageSrc && !isCity ? (
-          <>
-            <img
-              src={node.imageSrc}
-              alt=""
-              className="h-full w-full object-cover"
-              draggable={false}
-            />
-            <span className="absolute bottom-1 right-1 flex h-6 w-6 items-center justify-center rounded-lg border border-white/25 bg-black/80 text-sm shadow-lg">
-              {node.icon}
+        <span className="text-sm leading-none">
+          {node.icon}
+        </span>
+
+        <span className="min-w-0">
+          <span className="block whitespace-nowrap text-[9px] font-black uppercase tracking-[0.08em] sm:text-[10px]">
+            {isCurrentCity ? "Votre ville" : node.name}
+          </span>
+
+          {!isCurrentCity && (
+            <span className="block whitespace-nowrap text-[7px] font-bold opacity-75 sm:text-[8px]">
+              Niveau {node.level}
+              {!isCity && ` • ${formatNumber(node.recommendedPower)} puissance`}
             </span>
-            <span className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-white/[0.04]" />
-          </>
-        ) : (
-          node.icon
-        )}
-      </span>
-
-      <span className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-black/85 px-2.5 py-1 text-[10px] font-black text-white shadow-xl backdrop-blur">
-        {isCurrentCity &&
-          "👑 "}
-
-        {node.name}
+          )}
+        </span>
       </span>
     </button>
   )

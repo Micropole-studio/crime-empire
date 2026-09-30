@@ -29,6 +29,9 @@ export function createWorldNodes({
         "Le cœur de ton empire criminel. C'est ici que sont gérés tes bâtiments, tes ressources et tes troupes.",
 
       icon: "🏙️",
+      mapAssetSrc: "/buildings/villa3.png",
+      mapAssetAlt: "Villa principale de votre empire",
+      mapAssetWidth: 16,
 
       x: 31,
       y: 69,
@@ -61,6 +64,9 @@ export function createWorldNodes({
         "Une ville rivale contrôlée par un autre empire. Elle servira de première cible PvP lorsque le combat entre joueurs sera activé.",
 
       icon: "🌆",
+      mapAssetSrc: "/buildings/villa.png",
+      mapAssetAlt: "Villa fortifiée de Port Sombre",
+      mapAssetWidth: 14,
 
       x: 73,
       y: 27,
@@ -84,6 +90,9 @@ export function createWorldNodes({
       icon: "💵",
       imageSrc: "/world/locations/black-market-cover.webp",
       imageAlt: "Marché noir clandestin éclairé aux néons",
+      mapAssetSrc: "/buildings/hideout.png",
+      mapAssetAlt: "Planque clandestine du Marché noir",
+      mapAssetWidth: 12,
 
       x: 46,
       y: 53,
@@ -126,6 +135,9 @@ export function createWorldNodes({
       icon: "🧱",
       imageSrc: "/world/locations/construction-site-cover.webp",
       imageAlt: "Chantier clandestin surveillé au crépuscule",
+      mapAssetSrc: "/buildings/factory.png",
+      mapAssetAlt: "Installation industrielle du Chantier clandestin",
+      mapAssetWidth: 13,
 
       x: 61,
       y: 72,
@@ -170,6 +182,9 @@ export function createWorldNodes({
       icon: "🧰",
       imageSrc: "/world/locations/weapons-depot-cover.webp",
       imageAlt: "Dépôt d’armes fortifié de nuit",
+      mapAssetSrc: "/buildings/wall.png",
+      mapAssetAlt: "Complexe de sécurité du Dépôt d’armes",
+      mapAssetWidth: 13,
 
       x: 81,
       y: 53,
@@ -214,6 +229,9 @@ export function createWorldNodes({
       icon: "⭐",
       imageSrc: "/world/locations/district-network-cover.webp",
       imageAlt: "Quartier criminel animé par les néons",
+      mapAssetSrc: "/buildings/syndicate.png",
+      mapAssetAlt: "QG du Réseau des quartiers",
+      mapAssetWidth: 12,
 
       x: 52,
       y: 29,
