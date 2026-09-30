@@ -67,7 +67,6 @@ import type {
 
 import type {
   WorldNode,
-  WorldResourceType,
   WorldRewardRange,
 } from "../../types/worldMap"
 
@@ -1747,8 +1746,8 @@ export default function WorldMap({
           }}
         >
           <img
-            src="/world/world-map.jpg"
-            alt="Carte du monde de Crime Empire"
+            src="/world/world-map-fr.png"
+            alt="Carte du monde de Crime Empire avec les territoires intégrés"
             className="pointer-events-none absolute inset-0 h-full w-full select-none"
             draggable={
               false
@@ -1777,7 +1776,7 @@ export default function WorldMap({
             }}
           />
 
-          <div className="pointer-events-none absolute inset-0 bg-black/10" />
+          <div className="pointer-events-none absolute inset-0 bg-black/[0.035]" />
 
           <WorldAtmosphere />
 
@@ -1819,7 +1818,7 @@ export default function WorldMap({
         </div>
       </div>
 
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/55 via-transparent to-black/45" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/30" />
 
       <header
         data-world-interactive
@@ -1845,7 +1844,7 @@ export default function WorldMap({
           </p>
 
           <h1 className="text-lg font-black text-white">
-            World Map
+            Carte du monde
           </h1>
         </div>
       </header>
@@ -2133,37 +2132,15 @@ function WorldNodeMarker({
   selected,
   onSelect,
 }: WorldNodeMarkerProps) {
-  const isCity = node.type === "player_city"
-  const isCurrentCity = node.cityKind === "current"
   const hotspotWidth = Math.max(
     10,
-    Math.min(28, node.hotspotWidth ?? 18)
+    Math.min(36, node.hotspotWidth ?? 18)
   )
   const hotspotHeight = Math.max(
     9,
-    Math.min(24, node.hotspotHeight ?? 15)
+    Math.min(30, node.hotspotHeight ?? 15)
   )
   const rotation = node.hotspotRotation ?? 0
-
-  const resourceClasses: Record<
-    WorldResourceType,
-    string
-  > = {
-    money:
-      "border-emerald-300/60 bg-emerald-950/88 text-emerald-100",
-    materials:
-      "border-orange-300/60 bg-orange-950/88 text-orange-100",
-    equipment:
-      "border-sky-300/60 bg-sky-950/88 text-sky-100",
-    influence:
-      "border-violet-300/60 bg-violet-950/88 text-violet-100",
-  }
-
-  const labelClass = isCity
-    ? isCurrentCity
-      ? "border-amber-300/70 bg-amber-950/90 text-amber-50"
-      : "border-red-300/70 bg-red-950/90 text-red-50"
-    : resourceClasses[node.resourceType ?? "money"]
 
   return (
     <button
@@ -2183,12 +2160,13 @@ function WorldNodeMarker({
         transform: "translate(-50%, -50%)",
       }}
       aria-label={`Ouvrir ${node.name}`}
+      title={node.name}
     >
       <span
-        className={`world-hotspot-zone pointer-events-none absolute inset-0 rounded-[28%] border-2 transition duration-200 ${
+        className={`world-hotspot-zone pointer-events-none absolute inset-0 rounded-[24%] border-2 transition duration-200 ${
           selected
             ? "is-selected opacity-100"
-            : "opacity-45 group-hover:opacity-100"
+            : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
         }`}
         style={{
           transform: `rotate(${rotation}deg)`,
@@ -2196,33 +2174,12 @@ function WorldNodeMarker({
       />
 
       <span
-        className={`world-hotspot-pulse pointer-events-none absolute left-1/2 top-1/2 h-[82%] w-[82%] -translate-x-1/2 -translate-y-1/2 rounded-[30%] ${
-          selected ? "opacity-100" : "opacity-0 group-hover:opacity-60"
+        className={`world-hotspot-pulse pointer-events-none absolute left-1/2 top-1/2 h-[82%] w-[82%] -translate-x-1/2 -translate-y-1/2 rounded-[28%] ${
+          selected
+            ? "opacity-100"
+            : "opacity-0 group-hover:opacity-55 group-focus-visible:opacity-55"
         }`}
       />
-
-      <span
-        className={`pointer-events-none absolute left-1/2 top-[88%] z-20 flex w-max max-w-[150%] -translate-x-1/2 items-center gap-2 rounded-lg border px-2.5 py-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.72)] backdrop-blur-md transition duration-200 ${labelClass} ${
-          selected ? "scale-105 ring-1 ring-white/35" : ""
-        }`}
-      >
-        <span className="text-sm leading-none">
-          {node.icon}
-        </span>
-
-        <span className="min-w-0">
-          <span className="block whitespace-nowrap text-[9px] font-black uppercase tracking-[0.08em] sm:text-[10px]">
-            {isCurrentCity ? "Votre ville" : node.name}
-          </span>
-
-          {!isCurrentCity && (
-            <span className="block whitespace-nowrap text-[7px] font-bold opacity-75 sm:text-[8px]">
-              Niveau {node.level}
-              {!isCity && ` • ${formatNumber(node.recommendedPower)} puissance`}
-            </span>
-          )}
-        </span>
-      </span>
     </button>
   )
 }

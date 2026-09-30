@@ -33,11 +33,11 @@ export function createWorldNodes({
       mapAssetAlt: "Villa principale de votre empire",
       mapAssetWidth: 16,
 
-      x: 23,
-      y: 62,
-      hotspotWidth: 21,
-      hotspotHeight: 18,
-      hotspotRotation: -4,
+      x: 48,
+      y: 38,
+      hotspotWidth: 22,
+      hotspotHeight: 19,
+      hotspotRotation: 0,
 
       level:
         Math.max(
@@ -71,11 +71,11 @@ export function createWorldNodes({
       mapAssetAlt: "Villa fortifiée de Port Sombre",
       mapAssetWidth: 14,
 
-      x: 66,
-      y: 17,
-      hotspotWidth: 19,
-      hotspotHeight: 15,
-      hotspotRotation: 3,
+      x: 74,
+      y: 57,
+      hotspotWidth: 26,
+      hotspotHeight: 22,
+      hotspotRotation: 0,
 
       level: 4,
 
@@ -101,10 +101,10 @@ export function createWorldNodes({
       mapAssetWidth: 12,
 
       x: 18,
-      y: 39,
-      hotspotWidth: 19,
-      hotspotHeight: 17,
-      hotspotRotation: -4,
+      y: 25,
+      hotspotWidth: 24,
+      hotspotHeight: 22,
+      hotspotRotation: 0,
 
       level: 1,
       recommendedPower: 220,
@@ -148,11 +148,11 @@ export function createWorldNodes({
       mapAssetAlt: "Installation industrielle du Chantier clandestin",
       mapAssetWidth: 13,
 
-      x: 43,
-      y: 61,
-      hotspotWidth: 20,
-      hotspotHeight: 17,
-      hotspotRotation: -2,
+      x: 53,
+      y: 17,
+      hotspotWidth: 27,
+      hotspotHeight: 18,
+      hotspotRotation: 0,
 
       level: 2,
       recommendedPower: 360,
@@ -199,10 +199,10 @@ export function createWorldNodes({
       mapAssetWidth: 13,
 
       x: 82,
-      y: 49,
-      hotspotWidth: 18,
-      hotspotHeight: 17,
-      hotspotRotation: 4,
+      y: 35,
+      hotspotWidth: 24,
+      hotspotHeight: 20,
+      hotspotRotation: 0,
 
       level: 3,
       recommendedPower: 560,
@@ -248,10 +248,10 @@ export function createWorldNodes({
       mapAssetAlt: "QG du Réseau des quartiers",
       mapAssetWidth: 12,
 
-      x: 50,
-      y: 45,
-      hotspotWidth: 20,
-      hotspotHeight: 17,
+      x: 23,
+      y: 55,
+      hotspotWidth: 27,
+      hotspotHeight: 22,
       hotspotRotation: 0,
 
       level: 4,

@@ -387,7 +387,7 @@ export async function settleWorldOperation({
       cityId,
       combatResult.specialDrop.itemKey,
       combatResult.specialDrop.payload,
-      sourceLabel ?? "World Map"
+      sourceLabel ?? "Carte du monde"
     )
     publishProgress("specialDropGrantedAt")
   }
