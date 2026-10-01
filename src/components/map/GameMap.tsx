@@ -90,6 +90,11 @@ type GestureState = {
   velocityY: number
 }
 
+type PressedMapObject =
+  | { kind: "building"; buildingId: string }
+  | { kind: "world-map" }
+  | null
+
 const DEFAULT_WORLD_SIZE: WorldSize = {
   width: 1600,
   height: 900,
@@ -140,6 +145,12 @@ export default function GameMap({
 
   const suppressClickTimerRef =
     useRef<number | null>(null)
+
+  const pressedMapObjectRef =
+    useRef<PressedMapObject>(null)
+
+  const suppressNativeObjectClickUntilRef =
+    useRef(0)
 
   const cameraRef =
     useRef<Camera>({
@@ -809,13 +820,31 @@ export default function GameMap({
   ) {
     const target = event.target
 
-    // Seuls les contrôles flottants bloquent la caméra. Les bâtiments, eux,
-    // restent à la fois cliquables et utilisables comme point de départ d'un drag.
+    pressedMapObjectRef.current = null
+
+    // Seuls les contrôles flottants bloquent la caméra. Les bâtiments et
+    // l'hélicoptère restent cliquables tout en pouvant servir de point de départ
+    // à un drag. On mémorise donc l'objet pressé avant de capturer le pointeur.
     if (
       target instanceof Element &&
       target.closest("[data-map-ui]")
     ) {
       return
+    }
+
+    if (target instanceof Element) {
+      const mapObject = target.closest<HTMLElement>(
+        "[data-map-object]"
+      )
+
+      if (mapObject?.dataset.mapAction === "world-map") {
+        pressedMapObjectRef.current = { kind: "world-map" }
+      } else if (mapObject?.dataset.buildingId) {
+        pressedMapObjectRef.current = {
+          kind: "building",
+          buildingId: mapObject.dataset.buildingId,
+        }
+      }
     }
 
     if (event.pointerType === "mouse" && event.button !== 0) {
@@ -975,11 +1004,41 @@ export default function GameMap({
 
     setIsMoving(false)
 
+    const pressedMapObject = pressedMapObjectRef.current
+    pressedMapObjectRef.current = null
+
+    if (!gesture.moved && pressedMapObject) {
+      // Pointer capture retargete le clic vers le viewport sur certains navigateurs
+      // desktop. On active donc explicitement l'objet pressé au relâchement, comme
+      // sur la World Map, puis on ignore le clic natif qui pourrait suivre.
+      suppressNativeObjectClickUntilRef.current =
+        performance.now() + 250
+
+      if (pressedMapObject.kind === "world-map") {
+        onWorldMapOpen?.()
+      } else {
+        const building = uniqueBuildings.find(
+          (item) => item.id === pressedMapObject.buildingId
+        )
+
+        if (building) {
+          handleBuildingClick(building)
+        }
+      }
+    }
+
     if (gesture.mode === "pan" && gesture.moved) {
       startInertia(gesture.velocityX, gesture.velocityY)
     } else {
       settleCamera()
     }
+  }
+
+  function cancelPointer(
+    event: ReactPointerEvent<HTMLDivElement>
+  ) {
+    pressedMapObjectRef.current = null
+    finishPointer(event)
   }
 
   function handleWheel(
@@ -1057,7 +1116,7 @@ export default function GameMap({
         finishPointer
       }
       onPointerCancel={
-        finishPointer
+        cancelPointer
       }
       onWheel={
         handleWheel
@@ -1069,9 +1128,18 @@ export default function GameMap({
         const target =
           event.target
 
+        const elementUnderPointer =
+          document.elementFromPoint(
+            event.clientX,
+            event.clientY
+          )
+
         if (
-          target instanceof Element &&
-          target.closest(
+          (target instanceof Element &&
+            target.closest(
+              "[data-map-ui], [data-map-object]"
+            )) ||
+          elementUnderPointer?.closest(
             "[data-map-ui], [data-map-object]"
           )
         ) {
@@ -1144,12 +1212,18 @@ export default function GameMap({
         <button
           type="button"
           data-map-object
+          data-map-action="world-map"
           aria-label="Ouvrir la carte du monde"
           title="Ouvrir la carte du monde"
           onClick={(event) => {
             event.stopPropagation()
 
-            if (suppressClickRef.current) {
+            if (
+              suppressClickRef.current ||
+              (event.detail > 0 &&
+                performance.now() <
+                  suppressNativeObjectClickUntilRef.current)
+            ) {
               return
             }
 
@@ -1272,6 +1346,14 @@ export default function GameMap({
                   event
                 ) => {
                   event.stopPropagation()
+
+                  if (
+                    event.detail > 0 &&
+                    performance.now() <
+                      suppressNativeObjectClickUntilRef.current
+                  ) {
+                    return
+                  }
 
                   handleBuildingClick(
                     building
