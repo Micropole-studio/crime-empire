@@ -62,6 +62,7 @@ type Props = {
   activeOperation: WorldOperation | null
   loading: boolean
   errorMessage: string | null
+  previewOnly?: boolean
   onClose: () => void
   onLaunch: (
     node: WorldNode,
@@ -175,6 +176,7 @@ export default function WorldOperationPanel({
   activeOperation,
   loading,
   errorMessage,
+  previewOnly = false,
   onClose,
   onLaunch,
 }: Props) {
@@ -380,6 +382,7 @@ export default function WorldOperationPanel({
   }
 
   const canLaunch =
+    !previewOnly &&
     !loading &&
     !errorMessage &&
     !activeOperation &&
@@ -743,12 +746,23 @@ export default function WorldOperationPanel({
                   </strong>
                 </p>
 
-                <p className="flex items-center justify-between gap-3 text-zinc-400">
-                  <span>Réapparition cible</span>
-                  <strong className="text-white">
-                    {node.cooldownHours ?? 0} h
-                  </strong>
-                </p>
+                {node.cooldownHours !== undefined && (
+                  <p className="flex items-center justify-between gap-3 text-zinc-400">
+                    <span>Réapparition cible</span>
+                    <strong className="text-white">
+                      {node.cooldownHours} h
+                    </strong>
+                  </p>
+                )}
+
+                {node.distanceKm !== undefined && (
+                  <p className="flex items-center justify-between gap-3 text-zinc-400">
+                    <span>Distance</span>
+                    <strong className="text-white">
+                      {node.distanceKm.toFixed(1)} km
+                    </strong>
+                  </p>
+                )}
               </div>
             </section>
 
@@ -789,6 +803,12 @@ export default function WorldOperationPanel({
               </label>
             </section>
 
+            {previewOnly && (
+              <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3 text-xs font-semibold leading-relaxed text-blue-100">
+                🧪 Mode préparation PvP : tu peux composer l'escouade et comparer les puissances, mais aucune troupe ne quittera encore la garnison. Le lancement réel sera activé avec le combat PvP serveur.
+              </div>
+            )}
+
             {launchError && (
               <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs font-semibold leading-relaxed text-red-200">
                 {launchError}
@@ -801,13 +821,17 @@ export default function WorldOperationPanel({
               disabled={!canLaunch}
               className="w-full rounded-xl bg-red-700 px-4 py-3.5 text-sm font-black text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
             >
-              {isLaunching
-                ? "🚁 Déploiement de l'escouade..."
-                : activeOperation
-                  ? "Une opération est déjà en cours"
-                  : selectedUnitCount <= 0
-                    ? "Sélectionne une escouade"
-                    : `🚁 Lancer l'opération — ${formatNumber(squadPower.totalPower)} puissance`}
+              {previewOnly
+                ? selectedUnitCount <= 0
+                  ? "Sélectionne une escouade PvP"
+                  : `🔒 Escouade prête — ${formatNumber(squadPower.totalPower)} puissance`
+                : isLaunching
+                  ? "🚁 Déploiement de l'escouade..."
+                  : activeOperation
+                    ? "Une opération est déjà en cours"
+                    : selectedUnitCount <= 0
+                      ? "Sélectionne une escouade"
+                      : `🚁 Lancer l'opération — ${formatNumber(squadPower.totalPower)} puissance`}
             </button>
 
             <p className="px-1 text-center text-[10px] leading-relaxed text-zinc-600">

@@ -7,7 +7,6 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
-  type SyntheticEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react"
 
@@ -18,6 +17,14 @@ import {
 import {
   resolveWorldCombat,
 } from "../../data/worldCombat"
+
+import {
+  CENTRAL_REGION_BOUNDS,
+  WORLD_MAP_HEIGHT,
+  WORLD_MAP_WIDTH,
+  getPvpTravelSeconds,
+  getWorldDistanceKm,
+} from "../../data/worldLayout"
 
 import WorldOperationPanel from "./WorldOperationPanel"
 
@@ -44,6 +51,12 @@ import {
   reserveWorldOperationTroops,
   settleWorldOperation,
 } from "../../services/worldOperationService"
+
+import {
+  ensureCurrentWorldPosition,
+  loadWorldPlayerCities,
+  MultiplayerWorldMigrationRequiredError,
+} from "../../services/worldMultiplayerService"
 
 import type {
   Building,
@@ -77,6 +90,10 @@ import type {
 import type {
   NewGameNotification,
 } from "../../types/gameNotification"
+
+import type {
+  WorldPlayerCity,
+} from "../../types/worldPlayer"
 
 type Props = {
   onBack: () => void
@@ -138,9 +155,28 @@ type GestureState = {
 
 const DEFAULT_WORLD_SIZE:
   WorldSize = {
-    width: 1448,
-    height: 1086,
+    width: WORLD_MAP_WIDTH,
+    height: WORLD_MAP_HEIGHT,
   }
+
+function getPlayerCityAsset(
+  villaLevel: number
+) {
+  const level = Math.max(
+    0,
+    Math.floor(Number(villaLevel) || 0)
+  )
+
+  if (level >= 7) {
+    return "/buildings/villa3.png"
+  }
+
+  if (level >= 4) {
+    return "/buildings/villa2.png"
+  }
+
+  return "/buildings/villa.png"
+}
 
 function formatNumber(
   value: number
@@ -277,12 +313,25 @@ export default function WorldMap({
       scale: 1,
     })
 
+  const worldSize = DEFAULT_WORLD_SIZE
+
   const [
-    worldSize,
-    setWorldSize,
-  ] = useState<WorldSize>(
-    DEFAULT_WORLD_SIZE
-  )
+    worldPlayers,
+    setWorldPlayers,
+  ] = useState<WorldPlayerCity[]>([])
+
+  const [
+    multiplayerLoading,
+    setMultiplayerLoading,
+  ] = useState(true)
+
+  const [
+    multiplayerError,
+    setMultiplayerError,
+  ] = useState<string | null>(null)
+
+  const focusedOnCurrentCityRef =
+    useRef(false)
 
   const [
     isMoving,
@@ -398,6 +447,55 @@ export default function WorldMap({
       cancelled = true
     }
   }, [cityId])
+
+  const refreshWorldPlayers = useCallback(async () => {
+    try {
+      await ensureCurrentWorldPosition()
+      const players = await loadWorldPlayerCities()
+
+      setWorldPlayers(players)
+      setMultiplayerError(null)
+    } catch (error) {
+      if (
+        error instanceof
+        MultiplayerWorldMigrationRequiredError
+      ) {
+        setMultiplayerError(
+          "Migration Multiplayer World 1 requise dans Supabase."
+        )
+      } else {
+        setMultiplayerError(
+          error instanceof Error
+            ? error.message
+            : "Impossible de charger les villes des joueurs"
+        )
+      }
+    } finally {
+      setMultiplayerLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const initialTimeoutId = window.setTimeout(() => {
+      if (!cancelled) {
+        void refreshWorldPlayers()
+      }
+    }, 0)
+
+    const intervalId = window.setInterval(() => {
+      if (!cancelled) {
+        void refreshWorldPlayers()
+      }
+    }, 20000)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(initialTimeoutId)
+      window.clearInterval(intervalId)
+    }
+  }, [refreshWorldPlayers, playerId])
 
   useEffect(() => {
     const intervalId =
@@ -571,6 +669,14 @@ export default function WorldMap({
     squadPower: number,
     autoAssault: boolean
   ) {
+    if (
+      node.type === "player_city" &&
+      !node.isCurrentPlayer
+    ) {
+      throw new Error(
+        "Le combat PvP serveur n'est pas encore activé. Cette phase permet uniquement de préparer et comparer l'escouade."
+      )
+    }
     if (activeOperation) {
       throw new Error(
         "Une opération extérieure est déjà en cours."
@@ -730,20 +836,113 @@ export default function WorldMap({
     setOperationDetailsOpen(false)
   }
 
-  const nodes =
+  const staticNodes =
+    useMemo(
+      () => createWorldNodes(),
+      []
+    )
+
+  const currentWorldPlayer =
     useMemo(
       () =>
-        createWorldNodes({
-          currentCityName,
-          currentVillaLevel,
-          commanderLevel,
-        }),
-      [
-        commanderLevel,
-        currentCityName,
-        currentVillaLevel,
-      ]
+        worldPlayers.find(
+          (player) => player.is_current
+        ) ?? null,
+      [worldPlayers]
     )
+
+  const playerNodes =
+    useMemo(() => {
+      if (worldPlayers.length === 0) {
+        return [
+          {
+            id: "current-player-city-fallback",
+            key: "current_player_city_fallback",
+            type: "player_city" as const,
+            cityKind: "current" as const,
+            ownerPlayerId: playerId,
+            ownerCityId: cityId,
+            username: currentCityName,
+            name: currentCityName || "Ma ville",
+            description:
+              "Le cœur de ton empire criminel.",
+            icon: "🏙️",
+            mapAssetSrc: getPlayerCityAsset(currentVillaLevel),
+            mapAssetAlt: "Votre empire",
+            mapAssetWidth: 4.6,
+            x: 50,
+            y: 82,
+            hotspotWidth: 5.2,
+            hotspotHeight: 7,
+            level: Math.max(1, currentVillaLevel),
+            recommendedPower: Math.max(100, commanderLevel * 100),
+            travelSeconds: 0,
+            distanceKm: 0,
+            isCurrentPlayer: true,
+          } satisfies WorldNode,
+        ]
+      }
+
+      return worldPlayers.map((player) => {
+        const distanceKm = currentWorldPlayer
+          ? getWorldDistanceKm(
+              currentWorldPlayer.x,
+              currentWorldPlayer.y,
+              player.x,
+              player.y
+            )
+          : 0
+
+        const isCurrent =
+          player.is_current ||
+          player.player_id === playerId
+
+        return {
+          id: `player-city-${player.player_id}`,
+          key: `player_city_${player.player_id}`,
+          type: "player_city" as const,
+          cityKind: isCurrent ? "current" as const : "rival" as const,
+          ownerPlayerId: player.player_id,
+          ownerCityId: player.city_id,
+          username: player.username,
+          protectionUntil: player.protection_until,
+          isCurrentPlayer: isCurrent,
+          name: isCurrent
+            ? `${player.username} • Votre ville`
+            : `Empire de ${player.username}`,
+          description: isCurrent
+            ? "Votre position persistante dans la Région 1."
+            : "Une ville appartenant à un autre commandant de Crime Empire.",
+          icon: isCurrent ? "🏙️" : "🏰",
+          mapAssetSrc: getPlayerCityAsset(player.villa_level),
+          mapAssetAlt: `Ville de ${player.username}`,
+          mapAssetWidth: 4.6,
+          x: player.x,
+          y: player.y,
+          hotspotWidth: 5.2,
+          hotspotHeight: 7,
+          level: Math.max(1, player.villa_level),
+          recommendedPower: Math.max(100, player.estimated_power),
+          travelSeconds: isCurrent
+            ? 0
+            : getPvpTravelSeconds(distanceKm),
+          distanceKm,
+        } satisfies WorldNode
+      })
+    }, [
+      cityId,
+      commanderLevel,
+      currentCityName,
+      currentVillaLevel,
+      currentWorldPlayer,
+      playerId,
+      worldPlayers,
+    ])
+
+  const nodes = useMemo(
+    () => [...staticNodes, ...playerNodes],
+    [playerNodes, staticNodes]
+  )
 
   useEffect(() => {
     const operation = activeOperation
@@ -946,75 +1145,38 @@ export default function WorldMap({
 
       if (!viewport) {
         return {
-          minimum: 0.1,
-          maximum: 4,
-          initial: 1,
+          minimum: 0.06,
+          maximum: 2,
+          initial: 0.35,
         }
       }
 
       const viewportWidth =
-        Math.max(
-          1,
-          viewport.clientWidth
-        )
-
+        Math.max(1, viewport.clientWidth)
       const viewportHeight =
-        Math.max(
-          1,
-          viewport.clientHeight
-        )
+        Math.max(1, viewport.clientHeight)
 
       const containScale =
         Math.min(
-          viewportWidth /
-            worldSize.width,
-
-          viewportHeight /
-            worldSize.height
-        )
-
-      const coverScale =
-        Math.max(
-          viewportWidth /
-            worldSize.width,
-
-          viewportHeight /
-            worldSize.height
+          viewportWidth / worldSize.width,
+          viewportHeight / worldSize.height
         )
 
       const isMobile =
-        window.innerWidth <
-        768
+        window.innerWidth < 768
+
+      const desiredInitial =
+        isMobile ? 0.34 : 0.52
 
       return {
-        minimum:
-          Math.max(
-            0.05,
-            containScale
-          ),
-
-        maximum:
-          Math.max(
-            containScale * 4,
-            coverScale * 2.5,
-            2
-          ),
-
-        initial:
-          Math.max(
-            0.05,
-            isMobile
-              ? coverScale * 1.18
-              : Math.max(
-                  containScale,
-                  coverScale * 0.94
-                )
-          ),
+        minimum: Math.max(0.045, containScale),
+        maximum: Math.max(1.8, desiredInitial * 4),
+        initial: Math.max(
+          containScale,
+          desiredInitial
+        ),
       }
-    }, [
-      worldSize.height,
-      worldSize.width,
-    ])
+    }, [worldSize.height, worldSize.width])
 
   const getCameraBounds =
     useCallback(
@@ -1340,21 +1502,29 @@ export default function WorldMap({
       stopCameraAnimation()
 
       const { initial } = getScaleLimits()
+      const focusX =
+        ((currentWorldPlayer?.x ?? 50) / 100) *
+        worldSize.width
+      const focusY =
+        ((currentWorldPlayer?.y ?? 50) / 100) *
+        worldSize.height
 
       updateCamera({
         scale: initial,
         x:
-          (viewport.clientWidth -
-            worldSize.width * initial) /
-          2,
+          viewport.clientWidth / 2 -
+          focusX * initial,
         y:
-          (viewport.clientHeight -
-            worldSize.height * initial) /
-          2,
+          viewport.clientHeight / 2 -
+          focusY * initial,
       })
 
       cameraInitializedRef.current = true
+      focusedOnCurrentCityRef.current = Boolean(currentWorldPlayer?.player_id)
     }, [
+      currentWorldPlayer?.player_id,
+      currentWorldPlayer?.x,
+      currentWorldPlayer?.y,
       getScaleLimits,
       stopCameraAnimation,
       updateCamera,
@@ -1453,6 +1623,17 @@ export default function WorldMap({
     worldSize.height,
     worldSize.width,
   ])
+
+  useEffect(() => {
+    if (
+      !currentWorldPlayer ||
+      focusedOnCurrentCityRef.current
+    ) {
+      return
+    }
+
+    resetCamera()
+  }, [currentWorldPlayer, resetCamera])
 
   useEffect(
     () => () => {
@@ -1898,36 +2079,33 @@ export default function WorldMap({
             transformOrigin: "0 0",
           }}
         >
-          <img
-            src="/world/world-map-fr.png"
-            alt="Carte du monde de Crime Empire avec les territoires intégrés"
-            className="pointer-events-none absolute inset-0 h-full w-full select-none"
-            draggable={
-              false
-            }
-            onLoad={(
-              event:
-                SyntheticEvent<HTMLImageElement>
-            ) => {
-              const image =
-                event.currentTarget
+          <div className="world-expanse-base pointer-events-none absolute inset-0" />
 
-              if (
-                image.naturalWidth >
-                  0 &&
-                image.naturalHeight >
-                  0
-              ) {
-                setWorldSize({
-                  width:
-                    image.naturalWidth,
-
-                  height:
-                    image.naturalHeight,
-                })
-              }
+          <div
+            className="world-central-region pointer-events-none absolute overflow-hidden rounded-[3%] border border-white/10 shadow-[0_40px_110px_rgba(0,0,0,0.8)]"
+            style={{
+              left: `${CENTRAL_REGION_BOUNDS.left}%`,
+              top: `${CENTRAL_REGION_BOUNDS.top}%`,
+              width: `${CENTRAL_REGION_BOUNDS.width}%`,
+              height: `${CENTRAL_REGION_BOUNDS.height}%`,
             }}
-          />
+          >
+            <img
+              src="/world/world-map-fr.png"
+              alt="Secteur central de Crime Empire"
+              className="h-full w-full select-none object-cover"
+              draggable={false}
+            />
+            <div className="absolute inset-0 bg-black/[0.025]" />
+            <div className="world-central-city-mask absolute left-[42.5%] top-[39%] flex h-[6%] w-[16%] items-center justify-center rounded-[18%] border border-amber-300/25 bg-zinc-950/92 text-[20px] font-black uppercase tracking-[0.08em] text-amber-100 shadow-xl backdrop-blur">
+              Citadelle centrale
+            </div>
+            <div className="world-central-region-label absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-6 py-2 text-[22px] font-black uppercase tracking-[0.18em] text-white/80 backdrop-blur">
+              Secteur central • Port Sombre
+            </div>
+          </div>
+
+          <WorldExpanseDecor />
 
           <div className="pointer-events-none absolute inset-0 bg-black/[0.035]" />
 
@@ -1994,10 +2172,25 @@ export default function WorldMap({
         <div className="pointer-events-none flex items-center gap-2 rounded-full border border-white/10 bg-black/70 px-3 py-1.5 shadow-xl backdrop-blur-xl">
           <span aria-hidden="true">🌐</span>
           <span className="text-xs font-black text-white">
-            Carte du monde
+            Région 1
+          </span>
+          <span className="h-3 w-px bg-white/15" />
+          <span className="text-[10px] font-bold text-zinc-300">
+            {multiplayerLoading
+              ? "Synchronisation…"
+              : `${worldPlayers.length} empire${worldPlayers.length > 1 ? "s" : ""}`}
           </span>
         </div>
       </header>
+
+      {multiplayerError && (
+        <div
+          data-world-interactive
+          className="absolute left-1/2 top-16 z-30 max-w-[calc(100vw-24px)] -translate-x-1/2 rounded-xl border border-amber-500/30 bg-amber-950/90 px-3 py-2 text-center text-[10px] font-bold text-amber-100 shadow-xl backdrop-blur"
+        >
+          ⚠️ {multiplayerError}
+        </div>
+      )}
 
       <div
         data-world-interactive
@@ -2090,6 +2283,7 @@ export default function WorldMap({
           activeOperation={
             activeOperation
           }
+          currentTime={currentTime}
           cooldownRemainingSeconds={
             getWorldNodeCooldownRemainingSeconds(
               cityId,
@@ -2125,6 +2319,10 @@ export default function WorldMap({
           activeOperation={activeOperation}
           loading={militaryLoading}
           errorMessage={militaryError}
+          previewOnly={
+            preparingNode.type === "player_city" &&
+            !preparingNode.isCurrentPlayer
+          }
           onClose={() =>
             setPreparingNode(null)
           }
@@ -2290,6 +2488,47 @@ function WorldOperationRoute({
   )
 }
 
+const WORLD_DECOR_CLUSTERS = [
+  { x: 10, y: 16, size: 260 },
+  { x: 24, y: 11, size: 180 },
+  { x: 80, y: 14, size: 220 },
+  { x: 91, y: 28, size: 150 },
+  { x: 12, y: 70, size: 210 },
+  { x: 26, y: 88, size: 180 },
+  { x: 74, y: 84, size: 240 },
+  { x: 91, y: 72, size: 175 },
+] as const
+
+function WorldExpanseDecor() {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="world-region-grid absolute inset-0" />
+
+      {WORLD_DECOR_CLUSTERS.map((cluster, index) => (
+        <span
+          key={`${cluster.x}-${cluster.y}`}
+          className="world-distant-city-glow absolute rounded-full"
+          style={{
+            left: `${cluster.x}%`,
+            top: `${cluster.y}%`,
+            width: cluster.size,
+            height: cluster.size * 0.58,
+            transform: "translate(-50%, -50%)",
+            opacity: 0.42 + (index % 3) * 0.08,
+          }}
+        />
+      ))}
+
+      <div className="world-region-edge-label absolute left-[8%] top-[45%] -rotate-90">
+        Région 1 • Ouest
+      </div>
+      <div className="world-region-edge-label absolute right-[6%] top-[44%] rotate-90">
+        Région 1 • Est
+      </div>
+    </div>
+  )
+}
+
 function WorldAtmosphere() {
   return (
     <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
@@ -2313,13 +2552,75 @@ function WorldNodeMarker({
   selected,
   onSelect,
 }: WorldNodeMarkerProps) {
+  const isLivePlayerCity =
+    node.type === "player_city" &&
+    Boolean(node.ownerPlayerId)
+
+  if (isLivePlayerCity) {
+    const isCurrent = Boolean(node.isCurrentPlayer)
+
+    return (
+      <button
+        type="button"
+        data-world-node
+        data-world-node-id={node.id}
+        onClick={(event) => {
+          event.stopPropagation()
+          onSelect()
+        }}
+        className="group absolute z-20 border-0 bg-transparent p-0 text-center outline-none"
+        style={{
+          left: `${node.x}%`,
+          top: `${node.y}%`,
+          width: `${node.hotspotWidth ?? 5.2}%`,
+          height: `${node.hotspotHeight ?? 7}%`,
+          transform: "translate(-50%, -50%)",
+        }}
+        aria-label={`Ouvrir ${node.name}`}
+        title={node.name}
+      >
+        <span
+          className={`world-player-city-halo pointer-events-none absolute left-1/2 top-[54%] h-[72%] w-[84%] -translate-x-1/2 -translate-y-1/2 rounded-full ${
+            selected
+              ? "is-selected"
+              : ""
+          } ${
+            isCurrent
+              ? "is-current"
+              : "is-rival"
+          }`}
+        />
+
+        <span className="pointer-events-none absolute inset-x-0 bottom-[18%] top-[8%] flex items-end justify-center">
+          <img
+            src={node.mapAssetSrc ?? "/buildings/villa.png"}
+            alt=""
+            className="world-player-city-asset max-h-full max-w-full object-contain"
+            draggable={false}
+          />
+        </span>
+
+        <span
+          className={`world-player-city-label pointer-events-none absolute left-1/2 top-[79%] min-w-max -translate-x-1/2 rounded-full border px-5 py-2 text-[20px] font-black uppercase tracking-[0.08em] shadow-xl backdrop-blur ${
+            isCurrent
+              ? "border-blue-300/40 bg-blue-950/90 text-blue-100"
+              : "border-red-300/30 bg-zinc-950/90 text-red-100"
+          }`}
+        >
+          {isCurrent ? "VOUS" : node.username ?? node.name}
+          <span className="ml-1 opacity-60">Niv. {node.level}</span>
+        </span>
+      </button>
+    )
+  }
+
   const hotspotWidth = Math.max(
-    10,
-    Math.min(36, node.hotspotWidth ?? 18)
+    2.6,
+    Math.min(18, node.hotspotWidth ?? 6)
   )
   const hotspotHeight = Math.max(
-    9,
-    Math.min(30, node.hotspotHeight ?? 15)
+    2.6,
+    Math.min(16, node.hotspotHeight ?? 6)
   )
   const rotation = node.hotspotRotation ?? 0
 
@@ -2368,6 +2669,7 @@ function WorldNodeMarker({
 type WorldNodePanelProps = {
   node: WorldNode
   activeOperation: WorldOperation | null
+  currentTime: number
   cooldownRemainingSeconds: number
   onClose: () => void
   onBack: () => void
@@ -2377,55 +2679,75 @@ type WorldNodePanelProps = {
 function WorldNodePanel({
   node,
   activeOperation,
+  currentTime,
   cooldownRemainingSeconds,
   onClose,
   onBack,
   onPrepare,
 }: WorldNodePanelProps) {
-  const isCity =
-    node.type ===
-    "player_city"
-
+  const isPlayerCity =
+    node.type === "player_city"
+  const isNpcCity =
+    node.type === "npc_city"
   const isCurrentCity =
-    node.cityKind ===
-    "current"
+    Boolean(node.isCurrentPlayer) ||
+    node.cityKind === "current"
+  const protectionSeconds =
+    secondsUntilTimestamp(
+      currentTime,
+      node.protectionUntil ?? undefined
+    )
+  const isProtected =
+    isPlayerCity &&
+    !isCurrentCity &&
+    protectionSeconds > 0
+
+  const kindLabel = isPlayerCity
+    ? isCurrentCity
+      ? "Ta ville"
+      : "Ville d'un joueur"
+    : isNpcCity
+      ? "Forteresse stratégique"
+      : "Territoire PvE"
 
   return (
     <aside
       data-world-interactive
-      className="absolute inset-x-3 bottom-3 z-40 max-h-[66vh] overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950/94 p-4 shadow-[0_25px_80px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[390px] sm:p-5"
+      className="absolute inset-x-3 bottom-3 z-40 max-h-[70vh] overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950/94 p-4 shadow-[0_25px_80px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[410px] sm:p-5"
     >
       <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="flex h-13 w-13 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/10 p-3 text-3xl">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className={`flex h-13 w-13 shrink-0 items-center justify-center rounded-xl border p-3 text-3xl ${
+            isPlayerCity
+              ? isCurrentCity
+                ? "border-blue-400/30 bg-blue-500/10"
+                : "border-red-400/30 bg-red-500/10"
+              : "border-amber-500/25 bg-amber-500/10"
+          }`}>
             {node.icon}
           </div>
 
-          <div>
+          <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-300">
-              {isCity
-                ? isCurrentCity
-                  ? "Ta capitale"
-                  : "Ville rivale"
-                : "Territoire contrôlé par un bot"}
+              {kindLabel}
             </p>
 
-            <h2 className="mt-1 text-xl font-black text-white">
+            <h2 className="mt-1 truncate text-xl font-black text-white">
               {node.name}
             </h2>
 
             <p className="mt-1 text-xs font-bold text-zinc-500">
-              Niveau{" "}
-              {node.level}
+              Niveau {node.level}
+              {node.distanceKm !== undefined && !isCurrentCity
+                ? ` • ${node.distanceKm.toFixed(1)} km`
+                : ""}
             </p>
           </div>
         </div>
 
         <button
           type="button"
-          onClick={
-            onClose
-          }
+          onClick={onClose}
           aria-label="Fermer"
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-xl text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
         >
@@ -2442,19 +2764,17 @@ function WorldNodePanel({
             draggable={false}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
-          <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-3">
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/55">
-                Cible extérieure
-              </p>
-              <p className="mt-1 text-sm font-black text-white">
-                {node.name}
-              </p>
-            </div>
-            <div className="rounded-xl border border-white/15 bg-black/75 px-2.5 py-1.5 text-lg shadow-xl backdrop-blur">
-              {node.icon}
-            </div>
-          </div>
+        </div>
+      )}
+
+      {isPlayerCity && node.mapAssetSrc && (
+        <div className="mt-4 flex h-36 items-end justify-center overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_50%_80%,rgba(59,130,246,0.13),transparent_56%),linear-gradient(180deg,rgba(24,24,27,0.85),rgba(0,0,0,0.92))]">
+          <img
+            src={node.mapAssetSrc}
+            alt={node.mapAssetAlt ?? node.name}
+            className="max-h-[130px] max-w-[75%] object-contain drop-shadow-[0_18px_18px_rgba(0,0,0,0.8)]"
+            draggable={false}
+          />
         </div>
       )}
 
@@ -2464,70 +2784,67 @@ function WorldNodePanel({
 
       <div className="mt-4 grid grid-cols-2 gap-2">
         <InfoCard
-          label={
-            isCity
-              ? "Puissance estimée"
-              : "Puissance ennemie"
-          }
-          value={
-            formatNumber(
-              node.recommendedPower
-            )
-          }
+          label={isPlayerCity ? "Puissance estimée" : "Puissance ennemie"}
+          value={formatNumber(node.recommendedPower)}
         />
 
         <InfoCard
           label="Type"
           value={
-            isCity
-              ? "Ville de joueur"
-              : "Territoire PvE"
+            isPlayerCity
+              ? "Empire joueur"
+              : isNpcCity
+                ? "Ville stratégique"
+                : "Territoire PvE"
           }
         />
 
-        {!isCity &&
-          node.travelSeconds !==
-            undefined && (
-            <InfoCard
-              label="Temps de trajet"
-              value={
-                formatDuration(
-                  node.travelSeconds
-                )
-              }
-            />
-          )}
+        {node.travelSeconds !== undefined && !isCurrentCity && (
+          <InfoCard
+            label="Temps de trajet"
+            value={formatDuration(node.travelSeconds)}
+          />
+        )}
 
-        {!isCity &&
-          node.cooldownHours !==
-            undefined && (
-            <InfoCard
-              label="Réapparition"
-              value={`${node.cooldownHours} h`}
-            />
-          )}
+        {isPlayerCity && !isCurrentCity && (
+          <InfoCard
+            label="Protection"
+            value={
+              isProtected
+                ? formatDuration(protectionSeconds)
+                : "Aucune"
+            }
+          />
+        )}
 
-        {!isCity &&
-          cooldownRemainingSeconds > 0 && (
-            <InfoCard
-              label="Disponible dans"
-              value={formatDuration(cooldownRemainingSeconds)}
-            />
-          )}
+        {!isPlayerCity && !isNpcCity && node.cooldownHours !== undefined && (
+          <InfoCard
+            label="Réapparition"
+            value={`${node.cooldownHours} h`}
+          />
+        )}
+
+        {!isPlayerCity && !isNpcCity && cooldownRemainingSeconds > 0 && (
+          <InfoCard
+            label="Disponible dans"
+            value={formatDuration(cooldownRemainingSeconds)}
+          />
+        )}
       </div>
 
-      {!isCity &&
-        node.rewards && (
+      {!isPlayerCity && !isNpcCity && node.rewards && (
         <section className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.07] p-3">
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-300/75">
             Récompenses possibles
           </p>
+          <RewardLines rewards={node.rewards} />
+        </section>
+      )}
 
-          <RewardLines
-            rewards={
-              node.rewards
-            }
-          />
+      {isPlayerCity && !isCurrentCity && (
+        <section className="mt-4 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-xs leading-relaxed text-zinc-300">
+          <strong className="text-red-200">Fondation PvP active.</strong>{" "}
+          Tu peux déjà reconnaître cette ville et composer l'escouade que tu enverrais contre elle. Le combat serveur et le pillage du défenseur seront branchés dans la phase suivante.
         </section>
       )}
 
@@ -2535,20 +2852,31 @@ function WorldNodePanel({
         {isCurrentCity ? (
           <button
             type="button"
-            onClick={
-              onBack
-            }
-            className="w-full rounded-xl bg-amber-600 px-4 py-3 text-sm font-black text-white transition hover:bg-amber-500"
+            onClick={onBack}
+            className="w-full rounded-xl bg-blue-700 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-600"
           >
             🏙️ Retourner dans ma ville
           </button>
-        ) : isCity ? (
+        ) : isPlayerCity ? (
+          <button
+            type="button"
+            onClick={onPrepare}
+            disabled={Boolean(activeOperation) || isProtected}
+            className="w-full rounded-xl bg-red-700 px-4 py-3 text-sm font-black text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
+          >
+            {activeOperation
+              ? "🚁 Une opération est déjà en cours"
+              : isProtected
+                ? `🛡️ Protection — ${formatDuration(protectionSeconds)}`
+                : "⚔️ Préparer une attaque"}
+          </button>
+        ) : isNpcCity ? (
           <button
             type="button"
             disabled
             className="w-full cursor-not-allowed rounded-xl bg-zinc-800 px-4 py-3 text-sm font-black text-zinc-500"
           >
-            ⚔️ PvP bientôt disponible
+            🌆 Port Sombre — guerres territoriales bientôt
           </button>
         ) : (
           <button

@@ -1,6 +1,7 @@
 export type WorldNodeType =
   | "player_city"
   | "bot_territory"
+  | "npc_city"
 
 export type WorldCityKind =
   | "current"
@@ -84,6 +85,13 @@ export type WorldNode = {
   recommendedPower: number
 
   cityKind?: WorldCityKind
+
+  ownerPlayerId?: string
+  ownerCityId?: string
+  username?: string
+  protectionUntil?: string | null
+  distanceKm?: number
+  isCurrentPlayer?: boolean
 
   resourceType?:
     WorldResourceType

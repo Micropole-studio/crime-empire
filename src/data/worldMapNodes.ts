@@ -1,120 +1,74 @@
+import {
+  mapCentralHotspot,
+  mapCentralPoint,
+} from "./worldLayout"
+
 import type {
   WorldNode,
 } from "../types/worldMap"
 
-type CreateWorldNodesOptions = {
-  currentCityName: string
-  currentVillaLevel: number
-  commanderLevel: number
+function place(
+  localX: number,
+  localY: number,
+  localWidth: number,
+  localHeight: number
+) {
+  const point = mapCentralPoint(localX, localY)
+  const hotspot = mapCentralHotspot(
+    localWidth,
+    localHeight
+  )
+
+  return {
+    x: point.x,
+    y: point.y,
+    hotspotWidth: hotspot.width,
+    hotspotHeight: hotspot.height,
+  }
 }
 
-export function createWorldNodes({
-  currentCityName,
-  currentVillaLevel,
-  commanderLevel,
-}: CreateWorldNodesOptions): WorldNode[] {
+export function createWorldNodes(): WorldNode[] {
   return [
     {
-      id: "current-player-city",
-      key: "current_player_city",
-      type: "player_city",
-
-      cityKind: "current",
-
-      name:
-        currentCityName ||
-        "Ma ville",
-
-      description:
-        "Le cœur de ton empire criminel. C'est ici que sont gérés tes bâtiments, tes ressources et tes troupes.",
-
-      icon: "🏙️",
-      mapAssetSrc: "/buildings/villa3.png",
-      mapAssetAlt: "Villa principale de votre empire",
-      mapAssetWidth: 16,
-
-      x: 48,
-      y: 38,
-      hotspotWidth: 22,
-      hotspotHeight: 19,
-      hotspotRotation: 0,
-
-      level:
-        Math.max(
-          0,
-          currentVillaLevel
-        ),
-
-      recommendedPower:
-        Math.max(
-          100,
-          commanderLevel *
-            100
-        ),
-    },
-
-    {
-      id: "rival-player-city",
-      key: "rival_player_city",
-      type: "player_city",
-
+      id: "port-sombre",
+      key: "port_sombre",
+      type: "npc_city",
       cityKind: "rival",
-
-      name:
-        "Port Sombre",
-
+      name: "Port Sombre",
       description:
-        "Une ville rivale contrôlée par un autre empire. Elle servira de première cible PvP lorsque le combat entre joueurs sera activé.",
-
+        "La grande forteresse criminelle du secteur central. Port Sombre restera un point stratégique majeur lorsque les guerres territoriales seront activées.",
       icon: "🌆",
-      mapAssetSrc: "/buildings/villa.png",
-      mapAssetAlt: "Villa fortifiée de Port Sombre",
+      imageSrc: "/world/locations/district-network-cover.webp",
+      imageAlt: "Forteresse criminelle de Port Sombre",
+      mapAssetSrc: "/buildings/villa3.png",
+      mapAssetAlt: "Forteresse de Port Sombre",
       mapAssetWidth: 14,
-
-      x: 74,
-      y: 57,
-      hotspotWidth: 26,
-      hotspotHeight: 22,
+      ...place(74, 57, 26, 22),
       hotspotRotation: 0,
-
-      level: 4,
-
-      recommendedPower: 1250,
+      level: 8,
+      recommendedPower: 2500,
     },
 
     {
       id: "black-market",
       key: "black_market",
       type: "bot_territory",
-
-      name:
-        "Marché noir",
-
+      name: "Marché noir",
       description:
         "Un réseau de contrebande peu protégé. Une cible idéale pour récupérer rapidement de l'argent.",
-
       icon: "💵",
       imageSrc: "/world/locations/black-market-cover.webp",
       imageAlt: "Marché noir clandestin éclairé aux néons",
       mapAssetSrc: "/buildings/hideout.png",
       mapAssetAlt: "Planque clandestine du Marché noir",
       mapAssetWidth: 12,
-
-      x: 18,
-      y: 25,
-      hotspotWidth: 24,
-      hotspotHeight: 22,
+      ...place(18, 25, 24, 22),
       hotspotRotation: 0,
-
       level: 1,
       recommendedPower: 220,
-
-      resourceType:
-        "money",
-
+      resourceType: "money",
       travelSeconds: 60,
       cooldownHours: 6,
-
       rewards: {
         moneyGuaranteed: 1000,
         moneyBonusMax: 500,
@@ -134,35 +88,22 @@ export function createWorldNodes({
       id: "illegal-construction-site",
       key: "illegal_construction_site",
       type: "bot_territory",
-
-      name:
-        "Chantier clandestin",
-
+      name: "Chantier clandestin",
       description:
         "Des matériaux sont stockés sur ce chantier surveillé par une petite équipe armée.",
-
       icon: "🧱",
       imageSrc: "/world/locations/construction-site-cover.webp",
       imageAlt: "Chantier clandestin surveillé au crépuscule",
       mapAssetSrc: "/buildings/factory.png",
       mapAssetAlt: "Installation industrielle du Chantier clandestin",
       mapAssetWidth: 13,
-
-      x: 53,
-      y: 17,
-      hotspotWidth: 27,
-      hotspotHeight: 18,
+      ...place(53, 17, 27, 18),
       hotspotRotation: 0,
-
       level: 2,
       recommendedPower: 360,
-
-      resourceType:
-        "materials",
-
+      resourceType: "materials",
       travelSeconds: 120,
       cooldownHours: 8,
-
       rewards: {
         materialsGuaranteed: 30,
         materialsBonusMax: 15,
@@ -184,35 +125,22 @@ export function createWorldNodes({
       id: "weapons-depot",
       key: "weapons_depot",
       type: "bot_territory",
-
-      name:
-        "Dépôt d'armes",
-
+      name: "Dépôt d'armes",
       description:
         "Un entrepôt fortifié contenant des équipements destinés aux gangs de la région.",
-
       icon: "🧰",
       imageSrc: "/world/locations/weapons-depot-cover.webp",
       imageAlt: "Dépôt d’armes fortifié de nuit",
       mapAssetSrc: "/buildings/wall.png",
       mapAssetAlt: "Complexe de sécurité du Dépôt d’armes",
       mapAssetWidth: 13,
-
-      x: 82,
-      y: 35,
-      hotspotWidth: 24,
-      hotspotHeight: 20,
+      ...place(82, 35, 24, 20),
       hotspotRotation: 0,
-
       level: 3,
       recommendedPower: 560,
-
-      resourceType:
-        "equipment",
-
+      resourceType: "equipment",
       travelSeconds: 180,
       cooldownHours: 12,
-
       rewards: {
         materialsGuaranteed: 25,
         materialsBonusMax: 10,
@@ -234,35 +162,22 @@ export function createWorldNodes({
       id: "district-network",
       key: "district_network",
       type: "bot_territory",
-
-      name:
-        "Réseau des quartiers",
-
+      name: "Réseau des quartiers",
       description:
         "Un réseau criminel implanté dans plusieurs quartiers. Le contrôler rapportera principalement de l'Influence.",
-
       icon: "⭐",
       imageSrc: "/world/locations/district-network-cover.webp",
       imageAlt: "Quartier criminel animé par les néons",
       mapAssetSrc: "/buildings/syndicate.png",
       mapAssetAlt: "QG du Réseau des quartiers",
       mapAssetWidth: 12,
-
-      x: 23,
-      y: 55,
-      hotspotWidth: 27,
-      hotspotHeight: 22,
+      ...place(23, 55, 27, 22),
       hotspotRotation: 0,
-
       level: 4,
       recommendedPower: 780,
-
-      resourceType:
-        "influence",
-
+      resourceType: "influence",
       travelSeconds: 300,
       cooldownHours: 24,
-
       rewards: {
         moneyGuaranteed: 2000,
         moneyBonusMax: 1000,
