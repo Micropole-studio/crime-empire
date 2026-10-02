@@ -2580,6 +2580,22 @@ function WorldNodeMarker({
         title={node.name}
       >
         <span
+          className={`world-player-city-territory pointer-events-none absolute left-1/2 top-[58%] h-[78%] w-[108%] -translate-x-1/2 -translate-y-1/2 rounded-[38%] ${
+            isCurrent
+              ? "is-current"
+              : "is-rival"
+          }`}
+        />
+
+        <span
+          className={`world-player-city-territory-rings pointer-events-none absolute left-1/2 top-[58%] h-[66%] w-[94%] -translate-x-1/2 -translate-y-1/2 rounded-[42%] ${
+            isCurrent
+              ? "is-current"
+              : "is-rival"
+          }`}
+        />
+
+        <span
           className={`world-player-city-halo pointer-events-none absolute left-1/2 top-[54%] h-[72%] w-[84%] -translate-x-1/2 -translate-y-1/2 rounded-full ${
             selected
               ? "is-selected"

@@ -409,25 +409,31 @@ code {
 .world-expanse-base {
   background-color: #07100f;
   background-image:
-    radial-gradient(circle at 16% 18%, rgba(22, 101, 52, 0.23), transparent 16%),
-    radial-gradient(circle at 82% 15%, rgba(15, 118, 110, 0.16), transparent 18%),
-    radial-gradient(circle at 13% 77%, rgba(120, 53, 15, 0.12), transparent 20%),
-    radial-gradient(circle at 83% 78%, rgba(30, 64, 175, 0.11), transparent 20%),
-    radial-gradient(circle at 50% 50%, rgba(39, 39, 42, 0.45), transparent 40%),
-    linear-gradient(145deg, #07100f 0%, #0c1513 46%, #060909 100%);
+    linear-gradient(180deg, rgba(4, 9, 12, 0.22) 0%, rgba(4, 9, 12, 0.15) 30%, rgba(4, 9, 12, 0.26) 100%),
+    radial-gradient(circle at 18% 18%, rgba(52, 211, 153, 0.12), transparent 18%),
+    radial-gradient(circle at 84% 24%, rgba(250, 204, 21, 0.08), transparent 22%),
+    radial-gradient(circle at 24% 76%, rgba(59, 130, 246, 0.08), transparent 22%),
+    url("/world/world-region-1-background.png");
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  box-shadow:
+    inset 0 0 180px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
 .world-region-grid {
-  opacity: 0.22;
+  opacity: 0.18;
   background-image:
-    linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    linear-gradient(rgba(255,255,255,0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.028) 1px, transparent 1px);
   background-size: 500px 500px;
-  mask-image: radial-gradient(circle at center, black 22%, transparent 100%);
+  mask-image: radial-gradient(circle at center, black 28%, transparent 100%);
 }
 
 .world-central-region {
   background: #050708;
+  backdrop-filter: blur(2px);
 }
 
 .world-central-region::after {
@@ -461,6 +467,58 @@ code {
   letter-spacing: 0.28em;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+.world-player-city-territory {
+  background:
+    radial-gradient(ellipse at center,
+      rgba(250, 204, 21, 0.16) 0%,
+      rgba(176, 132, 23, 0.14) 30%,
+      rgba(36, 79, 43, 0.44) 56%,
+      rgba(17, 24, 39, 0.12) 72%,
+      transparent 86%),
+    repeating-linear-gradient(
+      -24deg,
+      rgba(255,255,255,0.02) 0 14px,
+      rgba(0,0,0,0.02) 14px 28px
+    );
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow:
+    inset 0 0 30px rgba(255,255,255,0.025),
+    inset 0 -22px 36px rgba(0,0,0,0.22),
+    0 18px 34px rgba(0,0,0,0.28);
+  opacity: 0.96;
+}
+
+.world-player-city-territory.is-current {
+  background:
+    radial-gradient(ellipse at center,
+      rgba(96, 165, 250, 0.20) 0%,
+      rgba(37, 99, 235, 0.12) 22%,
+      rgba(33, 70, 48, 0.42) 56%,
+      rgba(15, 23, 42, 0.12) 72%,
+      transparent 86%),
+    repeating-linear-gradient(
+      -24deg,
+      rgba(255,255,255,0.02) 0 14px,
+      rgba(0,0,0,0.02) 14px 28px
+    );
+}
+
+.world-player-city-territory-rings {
+  border: 1px dashed rgba(255,255,255,0.08);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.03),
+    0 0 24px rgba(0,0,0,0.18);
+  opacity: 0.7;
+}
+
+.world-player-city-territory-rings.is-current {
+  border-color: rgba(96, 165, 250, 0.22);
+}
+
+.world-player-city-territory-rings.is-rival {
+  border-color: rgba(248, 113, 113, 0.16);
 }
 
 .world-player-city-asset {
@@ -505,5 +563,10 @@ code {
 
   [data-world-node]:hover .world-player-city-halo {
     opacity: 0.9;
+  }
+
+  [data-world-node]:hover .world-player-city-territory,
+  [data-world-node]:hover .world-player-city-territory-rings {
+    transform: translate(-50%, -50%) scale(1.04);
   }
 }
