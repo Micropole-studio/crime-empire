@@ -22,6 +22,7 @@ import {
   CENTRAL_REGION_BOUNDS,
   WORLD_MAP_HEIGHT,
   WORLD_MAP_WIDTH,
+  createRegionOneSpawnSlots,
   getPvpTravelSeconds,
   getWorldDistanceKm,
 } from "../../data/worldLayout"
@@ -938,6 +939,22 @@ export default function WorldMap({
       playerId,
       worldPlayers,
     ])
+
+  const regionSlots = useMemo(
+    () => createRegionOneSpawnSlots(),
+    []
+  )
+
+  const occupiedSlotKeys = useMemo(
+    () =>
+      new Set(
+        worldPlayers.map(
+          (player) =>
+            `${player.x.toFixed(3)}:${player.y.toFixed(3)}`
+        )
+      ),
+    [worldPlayers]
+  )
 
   const nodes = useMemo(
     () => [...staticNodes, ...playerNodes],
@@ -2081,29 +2098,16 @@ export default function WorldMap({
         >
           <div className="world-expanse-base pointer-events-none absolute inset-0" />
 
-          <div
-            className="world-central-region pointer-events-none absolute overflow-hidden rounded-[3%] border border-white/10 shadow-[0_40px_110px_rgba(0,0,0,0.8)]"
-            style={{
-              left: `${CENTRAL_REGION_BOUNDS.left}%`,
-              top: `${CENTRAL_REGION_BOUNDS.top}%`,
-              width: `${CENTRAL_REGION_BOUNDS.width}%`,
-              height: `${CENTRAL_REGION_BOUNDS.height}%`,
-            }}
-          >
-            <img
-              src="/world/world-map-fr.png"
-              alt="Secteur central de Crime Empire"
-              className="h-full w-full select-none object-cover"
-              draggable={false}
-            />
-            <div className="absolute inset-0 bg-black/[0.025]" />
-            <div className="world-central-city-mask absolute left-[42.5%] top-[39%] flex h-[6%] w-[16%] items-center justify-center rounded-[18%] border border-amber-300/25 bg-zinc-950/92 text-[20px] font-black uppercase tracking-[0.08em] text-amber-100 shadow-xl backdrop-blur">
-              Citadelle centrale
-            </div>
-            <div className="world-central-region-label absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-6 py-2 text-[22px] font-black uppercase tracking-[0.18em] text-white/80 backdrop-blur">
-              Secteur central • Port Sombre
-            </div>
-          </div>
+          <WorldRegionTerrain />
+
+          <WorldSpawnSlotsLayer
+            slots={regionSlots}
+            occupiedSlotKeys={occupiedSlotKeys}
+          />
+
+          <WorldCentralSectorVisual
+            nodes={staticNodes}
+          />
 
           <WorldExpanseDecor />
 
@@ -2498,6 +2502,158 @@ const WORLD_DECOR_CLUSTERS = [
   { x: 74, y: 84, size: 240 },
   { x: 91, y: 72, size: 175 },
 ] as const
+
+type WorldSpawnSlotsLayerProps = {
+  slots: ReturnType<typeof createRegionOneSpawnSlots>
+  occupiedSlotKeys: Set<string>
+}
+
+function WorldRegionTerrain() {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <span className="world-region-water world-region-water-north" />
+      <span className="world-region-water world-region-water-south" />
+      <span className="world-region-water world-region-water-east" />
+
+      <span className="world-region-road world-region-road-horizontal-a" />
+      <span className="world-region-road world-region-road-horizontal-b" />
+      <span className="world-region-road world-region-road-vertical-a" />
+      <span className="world-region-road world-region-road-vertical-b" />
+      <span className="world-region-road world-region-road-diagonal" />
+
+      <span className="world-region-district world-region-district-a" />
+      <span className="world-region-district world-region-district-b" />
+      <span className="world-region-district world-region-district-c" />
+      <span className="world-region-district world-region-district-d" />
+      <span className="world-region-district world-region-district-e" />
+
+      <div className="world-region-title-chip absolute left-[7%] top-[6%]">Zone portuaire • Région 1</div>
+      <div className="world-region-title-chip absolute right-[8%] top-[11%]">Ceinture des docks</div>
+      <div className="world-region-title-chip absolute left-[9%] bottom-[10%]">Faubourgs industriels</div>
+      <div className="world-region-title-chip absolute right-[9%] bottom-[11%]">District logistique</div>
+    </div>
+  )
+}
+
+function WorldSpawnSlotsLayer({
+  slots,
+  occupiedSlotKeys,
+}: WorldSpawnSlotsLayerProps) {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      {slots.map((slot) => {
+        const key = `${slot.x.toFixed(3)}:${slot.y.toFixed(3)}`
+        const occupied = occupiedSlotKeys.has(key)
+
+        return (
+          <span
+            key={slot.slotIndex}
+            className={`world-slot-pad absolute ${occupied ? "is-occupied" : "is-empty"}`}
+            style={{
+              left: `${slot.x}%`,
+              top: `${slot.y}%`,
+              transform: "translate(-50%, -50%)",
+            }}
+          >
+            <span className="world-slot-pad-inner" />
+            <span className="world-slot-pad-road world-slot-pad-road-x" />
+            <span className="world-slot-pad-road world-slot-pad-road-y" />
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+function getPoiVariantClass(nodeKey: string) {
+  switch (nodeKey) {
+    case "black_market":
+      return "is-black-market"
+    case "illegal_construction_site":
+      return "is-construction"
+    case "weapons_depot":
+      return "is-weapons"
+    case "district_network":
+      return "is-district"
+    case "port_sombre":
+      return "is-port"
+    default:
+      return ""
+  }
+}
+
+type WorldCentralSectorVisualProps = {
+  nodes: WorldNode[]
+}
+
+function WorldCentralSectorVisual({
+  nodes,
+}: WorldCentralSectorVisualProps) {
+  const poiNodes = nodes.filter((node) => node.type !== "player_city")
+
+  return (
+    <div
+      className="world-central-region pointer-events-none absolute overflow-hidden rounded-[3%] border border-white/10 shadow-[0_40px_110px_rgba(0,0,0,0.8)]"
+      style={{
+        left: `${CENTRAL_REGION_BOUNDS.left}%`,
+        top: `${CENTRAL_REGION_BOUNDS.top}%`,
+        width: `${CENTRAL_REGION_BOUNDS.width}%`,
+        height: `${CENTRAL_REGION_BOUNDS.height}%`,
+      }}
+    >
+      <div className="world-central-sector-surface absolute inset-0" />
+      <span className="world-central-sector-road world-central-sector-road-x" />
+      <span className="world-central-sector-road world-central-sector-road-y" />
+      <span className="world-central-sector-road world-central-sector-road-port" />
+      <span className="world-central-sector-water world-central-sector-water-a" />
+      <span className="world-central-sector-water world-central-sector-water-b" />
+
+      <div className="world-central-region-label absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-6 py-2 text-[22px] font-black uppercase tracking-[0.18em] text-white/80 backdrop-blur">
+        Secteur central • Port Sombre
+      </div>
+
+      <div className="world-central-citadel absolute left-1/2 top-1/2 flex h-[18%] w-[24%] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-[18%] border border-amber-300/30 bg-zinc-950/88 text-center text-amber-100 shadow-xl backdrop-blur">
+        <span className="text-[18px] font-black uppercase tracking-[0.1em]">Citadelle centrale</span>
+        <span className="mt-1 text-[11px] uppercase tracking-[0.28em] text-white/55">Quartier sous haute surveillance</span>
+      </div>
+
+      {poiNodes.map((node) => {
+        const localLeft =
+          ((node.x - CENTRAL_REGION_BOUNDS.left) / CENTRAL_REGION_BOUNDS.width) * 100
+        const localTop =
+          ((node.y - CENTRAL_REGION_BOUNDS.top) / CENTRAL_REGION_BOUNDS.height) * 100
+        const localWidth = Math.max(
+          16,
+          ((node.hotspotWidth ?? 18) / CENTRAL_REGION_BOUNDS.width) * 100
+        )
+        const localHeight = Math.max(
+          13,
+          ((node.hotspotHeight ?? 14) / CENTRAL_REGION_BOUNDS.height) * 100
+        )
+
+        return (
+          <div
+            key={`sector-visual-${node.id}`}
+            className={`world-central-poi absolute ${getPoiVariantClass(node.key)}`}
+            style={{
+              left: `${localLeft}%`,
+              top: `${localTop}%`,
+              width: `${localWidth}%`,
+              height: `${localHeight}%`,
+              transform: `translate(-50%, -50%) rotate(${node.hotspotRotation ?? 0}deg)`,
+            }}
+          >
+            <div className="world-central-poi-core absolute inset-0 rounded-[20%]" />
+            <div className="world-central-poi-label absolute left-1/2 top-1/2 min-w-max -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-black/80 px-3 py-1.5 text-[14px] font-black uppercase tracking-[0.08em] text-white shadow-lg backdrop-blur">
+              <span className="mr-1.5">{node.icon}</span>
+              {node.name}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 function WorldExpanseDecor() {
   return (

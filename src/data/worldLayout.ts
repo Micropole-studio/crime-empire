@@ -75,3 +75,39 @@ export function getPvpTravelSeconds(
     )
   )
 }
+
+
+export type WorldSpawnSlot = {
+  slotIndex: number
+  x: number
+  y: number
+}
+
+export function createRegionOneSpawnSlots(): WorldSpawnSlot[] {
+  const slots: WorldSpawnSlot[] = []
+
+  for (let r = 0; r <= 11; r += 1) {
+    for (let c = 0; c <= 11; c += 1) {
+      const x = Number((6 + c * 8.0).toFixed(3))
+      const y = Number((7 + r * (86.0 / 11.0)).toFixed(3))
+
+      const isCentralReserved =
+        x >= 31 &&
+        x <= 69 &&
+        y >= 30 &&
+        y <= 70
+
+      if (isCentralReserved) {
+        continue
+      }
+
+      slots.push({
+        slotIndex: slots.length + 1,
+        x,
+        y,
+      })
+    }
+  }
+
+  return slots
+}
