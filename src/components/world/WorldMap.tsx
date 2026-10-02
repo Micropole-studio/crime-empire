@@ -19,7 +19,6 @@ import {
 } from "../../data/worldCombat"
 
 import {
-  CENTRAL_REGION_BOUNDS,
   WORLD_MAP_HEIGHT,
   WORLD_MAP_WIDTH,
   createRegionOneSpawnSlots,
@@ -2565,23 +2564,6 @@ function WorldSpawnSlotsLayer({
   )
 }
 
-function getPoiVariantClass(nodeKey: string) {
-  switch (nodeKey) {
-    case "black_market":
-      return "is-black-market"
-    case "illegal_construction_site":
-      return "is-construction"
-    case "weapons_depot":
-      return "is-weapons"
-    case "district_network":
-      return "is-district"
-    case "port_sombre":
-      return "is-port"
-    default:
-      return ""
-  }
-}
-
 type WorldPoiPadsLayerProps = {
   nodes: WorldNode[]
 }
@@ -2635,7 +2617,6 @@ function WorldPoiPadsLayer({
   )
 }
 
-function WorldExpanseDecor() {
 function WorldExpanseDecor() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
