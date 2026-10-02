@@ -1,32 +1,10 @@
-import {
-  mapCentralHotspot,
-  mapCentralPoint,
-} from "./worldLayout"
+import type { WorldNode } from "../types/worldMap"
 
-import type {
-  WorldNode,
-} from "../types/worldMap"
-
-function place(
-  localX: number,
-  localY: number,
-  localWidth: number,
-  localHeight: number
-) {
-  const point = mapCentralPoint(localX, localY)
-  const hotspot = mapCentralHotspot(
-    localWidth,
-    localHeight
-  )
-
-  return {
-    x: point.x,
-    y: point.y,
-    hotspotWidth: hotspot.width,
-    hotspotHeight: hotspot.height,
-  }
-}
-
+/*
+ * Région Sud — les lieux PvE sont déjà dessinés dans l'illustration de fond.
+ * Ici on ne pose donc AUCUN sprite par-dessus : uniquement des hotspots
+ * transparents aux coordonnées des lieux visibles sur la carte.
+ */
 export function createWorldNodes(): WorldNode[] {
   return [
     {
@@ -36,19 +14,18 @@ export function createWorldNodes(): WorldNode[] {
       cityKind: "rival",
       name: "Port Sombre",
       description:
-        "La grande forteresse criminelle du secteur central. Port Sombre restera un point stratégique majeur lorsque les guerres territoriales seront activées.",
-      icon: "🌆",
+        "Le grand port criminel de la Région Sud. Un point stratégique majeur pour les futures guerres territoriales.",
+      icon: "⚓",
       imageSrc: "/world/locations/district-network-cover.webp",
-      imageAlt: "Forteresse criminelle de Port Sombre",
-      mapAssetSrc: "/buildings/villa3.png",
-      mapAssetAlt: "Forteresse de Port Sombre",
-      mapAssetWidth: 14,
-      ...place(74, 57, 26, 22),
+      imageAlt: "Port Sombre",
+      x: 12.5,
+      y: 61.5,
+      hotspotWidth: 19,
+      hotspotHeight: 24,
       hotspotRotation: 0,
       level: 8,
       recommendedPower: 2500,
     },
-
     {
       id: "black-market",
       key: "black_market",
@@ -59,10 +36,10 @@ export function createWorldNodes(): WorldNode[] {
       icon: "💵",
       imageSrc: "/world/locations/black-market-cover.webp",
       imageAlt: "Marché noir clandestin éclairé aux néons",
-      mapAssetSrc: "/buildings/hideout.png",
-      mapAssetAlt: "Planque clandestine du Marché noir",
-      mapAssetWidth: 12,
-      ...place(18, 25, 24, 22),
+      x: 50.5,
+      y: 33,
+      hotspotWidth: 22,
+      hotspotHeight: 19,
       hotspotRotation: 0,
       level: 1,
       recommendedPower: 220,
@@ -83,7 +60,6 @@ export function createWorldNodes(): WorldNode[] {
         },
       },
     },
-
     {
       id: "illegal-construction-site",
       key: "illegal_construction_site",
@@ -94,10 +70,10 @@ export function createWorldNodes(): WorldNode[] {
       icon: "🧱",
       imageSrc: "/world/locations/construction-site-cover.webp",
       imageAlt: "Chantier clandestin surveillé au crépuscule",
-      mapAssetSrc: "/buildings/factory.png",
-      mapAssetAlt: "Installation industrielle du Chantier clandestin",
-      mapAssetWidth: 13,
-      ...place(53, 17, 27, 18),
+      x: 82.5,
+      y: 65,
+      hotspotWidth: 23,
+      hotspotHeight: 25,
       hotspotRotation: 0,
       level: 2,
       recommendedPower: 360,
@@ -120,7 +96,6 @@ export function createWorldNodes(): WorldNode[] {
         },
       },
     },
-
     {
       id: "weapons-depot",
       key: "weapons_depot",
@@ -131,10 +106,10 @@ export function createWorldNodes(): WorldNode[] {
       icon: "🧰",
       imageSrc: "/world/locations/weapons-depot-cover.webp",
       imageAlt: "Dépôt d’armes fortifié de nuit",
-      mapAssetSrc: "/buildings/wall.png",
-      mapAssetAlt: "Complexe de sécurité du Dépôt d’armes",
-      mapAssetWidth: 13,
-      ...place(82, 35, 24, 20),
+      x: 90,
+      y: 33,
+      hotspotWidth: 18,
+      hotspotHeight: 20,
       hotspotRotation: 0,
       level: 3,
       recommendedPower: 560,
@@ -157,21 +132,20 @@ export function createWorldNodes(): WorldNode[] {
         },
       },
     },
-
     {
       id: "district-network",
       key: "district_network",
       type: "bot_territory",
-      name: "Réseau des quartiers",
+      name: "Prison régionale",
       description:
-        "Un réseau criminel implanté dans plusieurs quartiers. Le contrôler rapportera principalement de l'Influence.",
-      icon: "⭐",
+        "Un réseau d'influence s'est organisé autour de la prison régionale. Le contrôler rapporte principalement de l'Influence.",
+      icon: "🏛️",
       imageSrc: "/world/locations/district-network-cover.webp",
-      imageAlt: "Quartier criminel animé par les néons",
-      mapAssetSrc: "/buildings/syndicate.png",
-      mapAssetAlt: "QG du Réseau des quartiers",
-      mapAssetWidth: 12,
-      ...place(23, 55, 27, 22),
+      imageAlt: "Prison régionale de la Région Sud",
+      x: 18,
+      y: 14,
+      hotspotWidth: 21,
+      hotspotHeight: 24,
       hotspotRotation: 0,
       level: 4,
       recommendedPower: 780,

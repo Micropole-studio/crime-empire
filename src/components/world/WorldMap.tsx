@@ -957,11 +957,11 @@ export default function WorldMap({
             icon: "🏙️",
             mapAssetSrc: getPlayerCityAsset(currentVillaLevel),
             mapAssetAlt: "Votre empire",
-            mapAssetWidth: 4.6,
-            x: 50,
-            y: 82,
-            hotspotWidth: 5.2,
-            hotspotHeight: 7,
+            mapAssetWidth: 8.2,
+            x: 47.6,
+            y: 57.2,
+            hotspotWidth: 9.4,
+            hotspotHeight: 12.5,
             level: Math.max(1, currentVillaLevel),
             recommendedPower: Math.max(100, commanderLevel * 100),
             travelSeconds: 0,
@@ -999,16 +999,16 @@ export default function WorldMap({
             ? `${player.username} • Votre ville`
             : `Empire de ${player.username}`,
           description: isCurrent
-            ? "Votre position persistante dans la Région 1."
+            ? "Votre position persistante dans la Région Sud."
             : "Une ville appartenant à un autre commandant de Crime Empire.",
           icon: isCurrent ? "🏙️" : "🏰",
           mapAssetSrc: getPlayerCityAsset(player.villa_level),
           mapAssetAlt: `Ville de ${player.username}`,
-          mapAssetWidth: 4.6,
+          mapAssetWidth: 8.2,
           x: player.x,
           y: player.y,
-          hotspotWidth: 5.2,
-          hotspotHeight: 7,
+          hotspotWidth: 9.4,
+          hotspotHeight: 12.5,
           level: Math.max(1, player.villa_level),
           recommendedPower: Math.max(100, player.estimated_power),
           travelSeconds: isCurrent
@@ -2170,8 +2170,6 @@ export default function WorldMap({
         >
           <div className="world-expanse-base pointer-events-none absolute inset-0" />
 
-          <WorldRegionTerrain />
-
           {relocationMode && (
             <WorldRelocationSlotsLayer
               slots={relocationSlots}
@@ -2180,9 +2178,7 @@ export default function WorldMap({
             />
           )}
 
-          <WorldExpanseDecor />
-
-          <div className="pointer-events-none absolute inset-0 bg-black/[0.035]" />
+          <div className="pointer-events-none absolute inset-0 bg-black/[0.015]" />
 
           {activeOperation && (
             <WorldOperationRoute
@@ -2245,7 +2241,7 @@ export default function WorldMap({
         <div className="pointer-events-none flex items-center gap-2 rounded-full border border-white/10 bg-black/70 px-3 py-1.5 shadow-xl backdrop-blur-xl">
           <span aria-hidden="true">🌐</span>
           <span className="text-xs font-black text-white">
-            Région 1
+            Région Sud
           </span>
           <span className="h-3 w-px bg-white/15" />
           <span className="text-[10px] font-bold text-zinc-300">
@@ -2606,14 +2602,6 @@ type WorldRelocationSlotsLayerProps = {
   onSelect: (slot: WorldSpawnSlot) => void
 }
 
-function WorldRegionTerrain() {
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <span className="world-region-concrete-noise absolute inset-0" />
-    </div>
-  )
-}
-
 function WorldRelocationSlotsLayer({
   slots,
   loading,
@@ -2641,15 +2629,11 @@ function WorldRelocationSlotsLayer({
           title="Emplacement libre"
         >
           <span className="world-relocation-slot-core" />
-          <span className="world-relocation-slot-plus">+</span>
+          <span className="world-relocation-slot-plus">{slot.slot_index}</span>
         </button>
       ))}
     </div>
   )
-}
-
-function WorldExpanseDecor() {
-  return null
 }
 
 type WorldNodeMarkerProps = {
@@ -2727,11 +2711,11 @@ function WorldNodeMarker({
 
   const hotspotWidth = Math.max(
     3.4,
-    Math.min(18, node.hotspotWidth ?? 6)
+    Math.min(26, node.hotspotWidth ?? 6)
   )
   const hotspotHeight = Math.max(
     3.4,
-    Math.min(16, node.hotspotHeight ?? 6)
+    Math.min(28, node.hotspotHeight ?? 6)
   )
   const rotation = node.hotspotRotation ?? 0
 
@@ -2744,7 +2728,7 @@ function WorldNodeMarker({
         event.stopPropagation()
         onSelect()
       }}
-      className="group absolute z-10 border-0 bg-transparent p-0 text-center outline-none"
+      className="group absolute z-10 border-0 bg-transparent p-0 outline-none"
       style={{
         left: `${node.x}%`,
         top: `${node.y}%`,
@@ -2756,32 +2740,8 @@ function WorldNodeMarker({
       title={node.name}
     >
       <span
-        className={`world-poi-ground pointer-events-none absolute left-1/2 top-[58%] h-[66%] w-[78%] -translate-x-1/2 -translate-y-1/2 rounded-[46%] ${
+        className={`world-background-hotspot pointer-events-none absolute inset-0 rounded-[22%] transition duration-150 ${
           selected ? "is-selected" : ""
-        }`}
-      />
-
-      {node.mapAssetSrc && (
-        <span className="pointer-events-none absolute inset-x-[8%] bottom-[22%] top-[2%] flex items-end justify-center">
-          <img
-            src={node.mapAssetSrc}
-            alt=""
-            className="world-poi-asset max-h-full max-w-full object-contain"
-            draggable={false}
-          />
-        </span>
-      )}
-
-      <span className="world-poi-label pointer-events-none absolute left-1/2 top-[81%] min-w-max -translate-x-1/2 rounded-full border border-white/10 bg-zinc-950/82 px-3 py-1 text-[14px] font-black tracking-[0.04em] text-white shadow-lg backdrop-blur">
-        <span className="mr-1">{node.icon}</span>
-        {node.name}
-      </span>
-
-      <span
-        className={`world-hotspot-zone pointer-events-none absolute inset-0 rounded-[24%] border-2 transition duration-200 ${
-          selected
-            ? "is-selected opacity-100"
-            : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
         }`}
         style={{
           transform: `rotate(${rotation}deg)`,

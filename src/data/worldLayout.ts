@@ -1,5 +1,5 @@
 export const WORLD_MAP_WIDTH = 6000
-export const WORLD_MAP_HEIGHT = 4500
+export const WORLD_MAP_HEIGHT = 4000
 
 export const WORLD_REGION_KEY = "region_1"
 
@@ -45,7 +45,7 @@ export function mapCentralHotspot(
  * Elle sert aux distances affichées et aux futurs temps de trajet PvP.
  */
 export const WORLD_WIDTH_KM = 60
-export const WORLD_HEIGHT_KM = 45
+export const WORLD_HEIGHT_KM = 40
 
 export function getWorldDistanceKm(
   fromX: number,
