@@ -177,22 +177,9 @@ const DEFAULT_WORLD_SIZE:
   }
 
 function getPlayerCityAsset(
-  villaLevel: number
+  _villaLevel: number
 ) {
-  const level = Math.max(
-    0,
-    Math.floor(Number(villaLevel) || 0)
-  )
-
-  if (level >= 7) {
-    return "/buildings/villa3.png"
-  }
-
-  if (level >= 4) {
-    return "/buildings/villa2.png"
-  }
-
-  return "/buildings/villa.png"
+  return "/world/cities/world-city-villa.png"
 }
 
 function formatNumber(
