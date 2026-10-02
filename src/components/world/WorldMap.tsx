@@ -177,8 +177,9 @@ const DEFAULT_WORLD_SIZE:
   }
 
 function getPlayerCityAsset(
-  _villaLevel: number
+  villaLevel: number
 ) {
+  void villaLevel
   return "/world/cities/world-city-villa.png"
 }
 
@@ -2710,6 +2711,19 @@ function WorldOperationRoute({
   const currentX = x1 + (x2 - x1) * progress
   const currentY = y1 + (y2 - y1) * progress
 
+  /*
+   * Le PNG de l'hélicoptère est naturellement orienté vers le bas-gauche
+   * (environ 144° dans le repère écran). On corrige cette orientation de
+   * référence pour que son nez suive réellement le trajet.
+   */
+  const travelDx = returning ? x1 - x2 : x2 - x1
+  const travelDy = returning ? y1 - y2 : y2 - y1
+  const headingDegrees =
+    Math.atan2(travelDy, travelDx) * (180 / Math.PI)
+  const helicopterAssetHeadingDegrees = 144
+  const helicopterRotationDegrees =
+    headingDegrees - helicopterAssetHeadingDegrees
+
   return (
     <div className="pointer-events-none absolute inset-0 z-[8]">
       <svg
@@ -2748,12 +2762,19 @@ function WorldOperationRoute({
           transform: "translate(-50%, -56%)",
         }}
       >
-        <img
-          src="/world/helicopter.png"
-          alt=""
-          draggable={false}
-          className="h-auto w-full select-none"
-        />
+        <div
+          className="world-operation-vehicle-facing"
+          style={{
+            transform: `rotate(${helicopterRotationDegrees}deg)`,
+          }}
+        >
+          <img
+            src="/world/helicopter.png"
+            alt=""
+            draggable={false}
+            className="h-auto w-full select-none"
+          />
+        </div>
         <span className="world-operation-vehicle-shadow" />
         <span
           className={`world-operation-status ${

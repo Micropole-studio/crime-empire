@@ -250,7 +250,14 @@ code {
   filter: drop-shadow(0 12px 12px rgba(0, 0, 0, 0.72));
 }
 
-.world-operation-vehicle > img {
+.world-operation-vehicle-facing {
+  position: relative;
+  z-index: 2;
+  transform-origin: 50% 50%;
+  transition: transform 220ms ease-out;
+}
+
+.world-operation-vehicle-facing > img {
   position: relative;
   z-index: 2;
   animation: world-helicopter-float 1.6s ease-in-out infinite;
@@ -344,8 +351,12 @@ code {
   .world-fog,
   .world-route-line,
   .world-route-target-ring,
-  .world-operation-vehicle > img {
+  .world-operation-vehicle-facing > img {
     animation: none !important;
+  }
+
+  .world-operation-vehicle-facing {
+    transition: none !important;
   }
 
   .world-operation-vehicle {
