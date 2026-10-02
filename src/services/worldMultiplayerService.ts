@@ -2,6 +2,7 @@ import { supabase } from "./supabase"
 
 import type {
   WorldPlayerCity,
+  WorldSpawnSlot,
 } from "../types/worldPlayer"
 
 export class MultiplayerWorldMigrationRequiredError extends Error {
@@ -21,6 +22,8 @@ function looksLikeMissingWorldFunction(error: {
     error.code === "PGRST202" ||
     message.includes("ensure_current_world_position") ||
     message.includes("get_world_player_cities") ||
+    message.includes("get_available_world_slots") ||
+    message.includes("relocate_current_world_position") ||
     message.includes("could not find the function")
   )
 }
@@ -115,4 +118,80 @@ export async function loadWorldPlayerCities(): Promise<WorldPlayerCity[]> {
     .filter(
       (item): item is WorldPlayerCity => Boolean(item)
     )
+}
+
+
+function normalizeWorldSpawnSlot(
+  value: unknown
+): WorldSpawnSlot | null {
+  if (!value || typeof value !== "object") {
+    return null
+  }
+
+  const row = value as Record<string, unknown>
+  const slotIndex = Number(row.slot_index)
+  const x = Number(row.x)
+  const y = Number(row.y)
+
+  if (
+    !Number.isFinite(slotIndex) ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(y)
+  ) {
+    return null
+  }
+
+  return {
+    region_key: String(row.region_key ?? "region_1"),
+    slot_index: Math.max(1, Math.floor(slotIndex)),
+    x,
+    y,
+  }
+}
+
+export async function loadAvailableWorldSlots(): Promise<WorldSpawnSlot[]> {
+  const { data, error } = await supabase.rpc(
+    "get_available_world_slots"
+  )
+
+  if (error) {
+    if (looksLikeMissingWorldFunction(error)) {
+      throw new MultiplayerWorldMigrationRequiredError(
+        "La migration World Relocation 1 n'a pas encore été exécutée."
+      )
+    }
+
+    throw error
+  }
+
+  const rows = Array.isArray(data) ? data : []
+
+  return rows
+    .map(normalizeWorldSpawnSlot)
+    .filter(
+      (item): item is WorldSpawnSlot => Boolean(item)
+    )
+}
+
+export async function relocateCurrentWorldPosition(
+  slotIndex: number
+) {
+  const { data, error } = await supabase.rpc(
+    "relocate_current_world_position",
+    {
+      p_slot_index: Math.max(1, Math.floor(slotIndex)),
+    }
+  )
+
+  if (error) {
+    if (looksLikeMissingWorldFunction(error)) {
+      throw new MultiplayerWorldMigrationRequiredError(
+        "La migration World Relocation 1 n'a pas encore été exécutée."
+      )
+    }
+
+    throw error
+  }
+
+  return data
 }

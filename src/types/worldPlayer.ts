@@ -12,3 +12,10 @@ export type WorldPlayerCity = {
   spawned_at: string | null
   is_current: boolean
 }
+
+export type WorldSpawnSlot = {
+  region_key: string
+  slot_index: number
+  x: number
+  y: number
+}

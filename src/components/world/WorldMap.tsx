@@ -21,7 +21,6 @@ import {
 import {
   WORLD_MAP_HEIGHT,
   WORLD_MAP_WIDTH,
-  createRegionOneSpawnSlots,
   getPvpTravelSeconds,
   getWorldDistanceKm,
 } from "../../data/worldLayout"
@@ -54,8 +53,10 @@ import {
 
 import {
   ensureCurrentWorldPosition,
+  loadAvailableWorldSlots,
   loadWorldPlayerCities,
   MultiplayerWorldMigrationRequiredError,
+  relocateCurrentWorldPosition,
 } from "../../services/worldMultiplayerService"
 
 import type {
@@ -93,6 +94,7 @@ import type {
 
 import type {
   WorldPlayerCity,
+  WorldSpawnSlot,
 } from "../../types/worldPlayer"
 
 type Props = {
@@ -330,6 +332,26 @@ export default function WorldMap({
     setMultiplayerError,
   ] = useState<string | null>(null)
 
+  const [
+    relocationMode,
+    setRelocationMode,
+  ] = useState(false)
+
+  const [
+    relocationSlots,
+    setRelocationSlots,
+  ] = useState<WorldSpawnSlot[]>([])
+
+  const [
+    relocationLoading,
+    setRelocationLoading,
+  ] = useState(false)
+
+  const [
+    relocationError,
+    setRelocationError,
+  ] = useState<string | null>(null)
+
   const focusedOnCurrentCityRef =
     useRef(false)
 
@@ -474,6 +496,72 @@ export default function WorldMap({
       setMultiplayerLoading(false)
     }
   }, [])
+
+  const startRelocationMode = useCallback(async () => {
+    setRelocationLoading(true)
+    setRelocationError(null)
+
+    try {
+      const slots = await loadAvailableWorldSlots()
+      setRelocationSlots(slots)
+      setSelectedNode(null)
+      setRelocationMode(true)
+    } catch (error) {
+      setRelocationError(
+        error instanceof Error
+          ? error.message
+          : "Impossible de charger les emplacements libres"
+      )
+    } finally {
+      setRelocationLoading(false)
+    }
+  }, [])
+
+  const cancelRelocationMode = useCallback(() => {
+    setRelocationMode(false)
+    setRelocationSlots([])
+    setRelocationError(null)
+  }, [])
+
+  const handleRelocationSlot = useCallback(
+    async (slot: WorldSpawnSlot) => {
+      const confirmed = window.confirm(
+        "Déplacer ta ville sur cet emplacement ?"
+      )
+
+      if (!confirmed) {
+        return
+      }
+
+      setRelocationLoading(true)
+      setRelocationError(null)
+
+      try {
+        await relocateCurrentWorldPosition(slot.slot_index)
+        await refreshWorldPlayers()
+        setRelocationMode(false)
+        setRelocationSlots([])
+        setWorldNotice({
+          title: "Ville déplacée",
+          message: "Ta ville occupe maintenant ce nouvel emplacement.",
+          tone: "success",
+          category: "world",
+        })
+        window.setTimeout(() => {
+          setWorldNotice(null)
+        }, 3200)
+      } catch (error) {
+        setRelocationError(
+          error instanceof Error
+            ? error.message
+            : "Impossible de déplacer la ville"
+        )
+      } finally {
+        setRelocationLoading(false)
+      }
+    },
+    [refreshWorldPlayers]
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -939,21 +1027,6 @@ export default function WorldMap({
       worldPlayers,
     ])
 
-  const regionSlots = useMemo(
-    () => createRegionOneSpawnSlots(),
-    []
-  )
-
-  const occupiedSlotKeys = useMemo(
-    () =>
-      new Set(
-        worldPlayers.map(
-          (player) =>
-            `${player.x.toFixed(3)}:${player.y.toFixed(3)}`
-        )
-      ),
-    [worldPlayers]
-  )
 
   const nodes = useMemo(
     () => [...staticNodes, ...playerNodes],
@@ -2099,20 +2172,17 @@ export default function WorldMap({
 
           <WorldRegionTerrain />
 
-          <WorldSpawnSlotsLayer
-            slots={regionSlots}
-            occupiedSlotKeys={occupiedSlotKeys}
-          />
-
-          <WorldPoiPadsLayer
-            nodes={staticNodes}
-          />
+          {relocationMode && (
+            <WorldRelocationSlotsLayer
+              slots={relocationSlots}
+              loading={relocationLoading}
+              onSelect={handleRelocationSlot}
+            />
+          )}
 
           <WorldExpanseDecor />
 
           <div className="pointer-events-none absolute inset-0 bg-black/[0.035]" />
-
-          <WorldAtmosphere />
 
           {activeOperation && (
             <WorldOperationRoute
@@ -2192,6 +2262,38 @@ export default function WorldMap({
           className="absolute left-1/2 top-16 z-30 max-w-[calc(100vw-24px)] -translate-x-1/2 rounded-xl border border-amber-500/30 bg-amber-950/90 px-3 py-2 text-center text-[10px] font-bold text-amber-100 shadow-xl backdrop-blur"
         >
           ⚠️ {multiplayerError}
+        </div>
+      )}
+
+      {relocationMode && (
+        <div
+          data-world-interactive
+          className="absolute left-1/2 top-16 z-40 flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-3 rounded-2xl border border-amber-400/30 bg-zinc-950/94 px-4 py-3 shadow-2xl backdrop-blur-xl"
+        >
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-200">
+              Déplacement de la ville
+            </p>
+            <p className="mt-0.5 text-[10px] font-bold text-zinc-400">
+              Choisis un emplacement libre sur le terrain.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={cancelRelocationMode}
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-black text-white hover:bg-white/10"
+          >
+            Annuler
+          </button>
+        </div>
+      )}
+
+      {relocationError && (
+        <div
+          data-world-interactive
+          className="absolute left-1/2 top-32 z-40 max-w-[calc(100vw-24px)] -translate-x-1/2 rounded-xl border border-red-500/30 bg-red-950/90 px-3 py-2 text-center text-[10px] font-bold text-red-100 shadow-xl backdrop-blur"
+        >
+          ⚠️ {relocationError}
         </div>
       )}
 
@@ -2307,6 +2409,12 @@ export default function WorldMap({
               selectedNode
             )
           }
+          onRelocate={
+            selectedNode.isCurrentPlayer || selectedNode.cityKind === "current"
+              ? startRelocationMode
+              : undefined
+          }
+          relocationLoading={relocationLoading}
         />
       )}
 
@@ -2491,127 +2599,54 @@ function WorldOperationRoute({
   )
 }
 
-const WORLD_DECOR_CLUSTERS = [
-  { x: 10, y: 16, size: 260 },
-  { x: 24, y: 11, size: 180 },
-  { x: 80, y: 14, size: 220 },
-  { x: 91, y: 28, size: 150 },
-  { x: 12, y: 70, size: 210 },
-  { x: 26, y: 88, size: 180 },
-  { x: 74, y: 84, size: 240 },
-  { x: 91, y: 72, size: 175 },
-] as const
 
-type WorldSpawnSlotsLayerProps = {
-  slots: ReturnType<typeof createRegionOneSpawnSlots>
-  occupiedSlotKeys: Set<string>
+type WorldRelocationSlotsLayerProps = {
+  slots: WorldSpawnSlot[]
+  loading: boolean
+  onSelect: (slot: WorldSpawnSlot) => void
 }
 
 function WorldRegionTerrain() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <span className="world-region-water world-region-water-north" />
-      <span className="world-region-water world-region-water-south" />
-      <span className="world-region-water world-region-water-east" />
-
+      <span className="world-region-concrete-noise absolute inset-0" />
       <span className="world-region-road world-region-road-horizontal-a" />
       <span className="world-region-road world-region-road-horizontal-b" />
       <span className="world-region-road world-region-road-vertical-a" />
       <span className="world-region-road world-region-road-vertical-b" />
-      <span className="world-region-road world-region-road-diagonal" />
-
-      <span className="world-region-district world-region-district-a" />
-      <span className="world-region-district world-region-district-b" />
-      <span className="world-region-district world-region-district-c" />
-      <span className="world-region-district world-region-district-d" />
-      <span className="world-region-district world-region-district-e" />
-
-      <div className="world-region-title-chip absolute left-[7%] top-[6%]">Zone portuaire • Région 1</div>
-      <div className="world-region-title-chip absolute right-[8%] top-[11%]">Ceinture des docks</div>
-      <div className="world-region-title-chip absolute left-[9%] bottom-[10%]">Faubourgs industriels</div>
-      <div className="world-region-title-chip absolute right-[9%] bottom-[11%]">District logistique</div>
     </div>
   )
 }
 
-function WorldSpawnSlotsLayer({
+function WorldRelocationSlotsLayer({
   slots,
-  occupiedSlotKeys,
-}: WorldSpawnSlotsLayerProps) {
+  loading,
+  onSelect,
+}: WorldRelocationSlotsLayerProps) {
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {slots.map((slot) => {
-        const key = `${slot.x.toFixed(3)}:${slot.y.toFixed(3)}`
-        const occupied = occupiedSlotKeys.has(key)
-
-        return (
-          <span
-            key={slot.slotIndex}
-            className={`world-slot-pad absolute ${occupied ? "is-occupied" : "is-empty"}`}
-            style={{
-              left: `${slot.x}%`,
-              top: `${slot.y}%`,
-              transform: "translate(-50%, -50%)",
-            }}
-          >
-            <span className="world-slot-pad-inner" />
-            <span className="world-slot-pad-road world-slot-pad-road-x" />
-            <span className="world-slot-pad-road world-slot-pad-road-y" />
-          </span>
-        )
-      })}
-    </div>
-  )
-}
-
-type WorldPoiPadsLayerProps = {
-  nodes: WorldNode[]
-}
-
-function getPoiVariantClass(nodeKey: string) {
-  switch (nodeKey) {
-    case "black_market":
-      return "is-black-market"
-    case "illegal_construction_site":
-      return "is-construction"
-    case "weapons_depot":
-      return "is-weapons"
-    case "district_network":
-      return "is-district"
-    case "port_sombre":
-      return "is-port"
-    default:
-      return ""
-  }
-}
-
-function WorldPoiPadsLayer({
-  nodes,
-}: WorldPoiPadsLayerProps) {
-  const poiNodes = nodes.filter((node) => node.type !== "player_city")
-
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {poiNodes.map((node) => (
-        <div
-          key={`poi-pad-${node.id}`}
-          className={`world-poi-pad absolute ${getPoiVariantClass(node.key)}`}
+    <div className="absolute inset-0 z-[16] overflow-hidden">
+      {slots.map((slot) => (
+        <button
+          key={slot.slot_index}
+          type="button"
+          data-world-interactive
+          className="world-relocation-slot absolute"
+          disabled={loading}
           style={{
-            left: `${node.x}%`,
-            top: `${node.y}%`,
-            width: `${node.hotspotWidth ?? 16}%`,
-            height: `${node.hotspotHeight ?? 12}%`,
-            transform: `translate(-50%, -50%) rotate(${node.hotspotRotation ?? 0}deg)`,
+            left: `${slot.x}%`,
+            top: `${slot.y}%`,
+            transform: "translate(-50%, -50%)",
           }}
+          onClick={(event) => {
+            event.stopPropagation()
+            onSelect(slot)
+          }}
+          aria-label={`Déplacer la ville sur l'emplacement ${slot.slot_index}`}
+          title="Emplacement libre"
         >
-          <span className="world-poi-pad-surface absolute inset-0 rounded-[20%]" />
-          <span className="world-poi-pad-road world-poi-pad-road-h absolute" />
-          <span className="world-poi-pad-road world-poi-pad-road-v absolute" />
-          <span className="world-poi-pad-label absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/78 px-3 py-1.5 text-[13px] font-black uppercase tracking-[0.08em] text-white shadow-lg backdrop-blur">
-            <span className="mr-1.5">{node.icon}</span>
-            {node.name}
-          </span>
-        </div>
+          <span className="world-relocation-slot-core" />
+          <span className="world-relocation-slot-plus">+</span>
+        </button>
       ))}
     </div>
   )
@@ -2621,40 +2656,6 @@ function WorldExpanseDecor() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
       <div className="world-region-grid absolute inset-0" />
-
-      {WORLD_DECOR_CLUSTERS.map((cluster, index) => (
-        <span
-          key={`${cluster.x}-${cluster.y}`}
-          className="world-distant-city-glow absolute rounded-full"
-          style={{
-            left: `${cluster.x}%`,
-            top: `${cluster.y}%`,
-            width: cluster.size,
-            height: cluster.size * 0.58,
-            transform: "translate(-50%, -50%)",
-            opacity: 0.42 + (index % 3) * 0.08,
-          }}
-        />
-      ))}
-
-      <div className="world-region-edge-label absolute left-[8%] top-[45%] -rotate-90">
-        Région 1 • Ouest
-      </div>
-      <div className="world-region-edge-label absolute right-[6%] top-[44%] rotate-90">
-        Région 1 • Est
-      </div>
-    </div>
-  )
-}
-
-function WorldAtmosphere() {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
-      <span className="world-fog world-fog-a" />
-      <span className="world-fog world-fog-b" />
-      <span className="world-fog world-fog-c" />
-      <span className="world-ambient-glow world-ambient-glow-a" />
-      <span className="world-ambient-glow world-ambient-glow-b" />
     </div>
   )
 }
@@ -2698,22 +2699,6 @@ function WorldNodeMarker({
         title={node.name}
       >
         <span
-          className={`world-player-city-territory pointer-events-none absolute left-1/2 top-[58%] h-[78%] w-[108%] -translate-x-1/2 -translate-y-1/2 rounded-[38%] ${
-            isCurrent
-              ? "is-current"
-              : "is-rival"
-          }`}
-        />
-
-        <span
-          className={`world-player-city-territory-rings pointer-events-none absolute left-1/2 top-[58%] h-[66%] w-[94%] -translate-x-1/2 -translate-y-1/2 rounded-[42%] ${
-            isCurrent
-              ? "is-current"
-              : "is-rival"
-          }`}
-        />
-
-        <span
           className={`world-player-city-halo pointer-events-none absolute left-1/2 top-[54%] h-[72%] w-[84%] -translate-x-1/2 -translate-y-1/2 rounded-full ${
             selected
               ? "is-selected"
@@ -2749,11 +2734,11 @@ function WorldNodeMarker({
   }
 
   const hotspotWidth = Math.max(
-    2.6,
+    3.4,
     Math.min(18, node.hotspotWidth ?? 6)
   )
   const hotspotHeight = Math.max(
-    2.6,
+    3.4,
     Math.min(16, node.hotspotHeight ?? 6)
   )
   const rotation = node.hotspotRotation ?? 0
@@ -2767,7 +2752,7 @@ function WorldNodeMarker({
         event.stopPropagation()
         onSelect()
       }}
-      className="group absolute z-10 border-0 bg-transparent p-0 text-left outline-none"
+      className="group absolute z-10 border-0 bg-transparent p-0 text-center outline-none"
       style={{
         left: `${node.x}%`,
         top: `${node.y}%`,
@@ -2779,6 +2764,28 @@ function WorldNodeMarker({
       title={node.name}
     >
       <span
+        className={`world-poi-ground pointer-events-none absolute left-1/2 top-[58%] h-[66%] w-[78%] -translate-x-1/2 -translate-y-1/2 rounded-[46%] ${
+          selected ? "is-selected" : ""
+        }`}
+      />
+
+      {node.mapAssetSrc && (
+        <span className="pointer-events-none absolute inset-x-[8%] bottom-[22%] top-[2%] flex items-end justify-center">
+          <img
+            src={node.mapAssetSrc}
+            alt=""
+            className="world-poi-asset max-h-full max-w-full object-contain"
+            draggable={false}
+          />
+        </span>
+      )}
+
+      <span className="world-poi-label pointer-events-none absolute left-1/2 top-[78%] min-w-max -translate-x-1/2 rounded-full border border-white/10 bg-zinc-950/88 px-4 py-1.5 text-[16px] font-black uppercase tracking-[0.07em] text-white shadow-xl backdrop-blur">
+        <span className="mr-1">{node.icon}</span>
+        {node.name}
+      </span>
+
+      <span
         className={`world-hotspot-zone pointer-events-none absolute inset-0 rounded-[24%] border-2 transition duration-200 ${
           selected
             ? "is-selected opacity-100"
@@ -2787,14 +2794,6 @@ function WorldNodeMarker({
         style={{
           transform: `rotate(${rotation}deg)`,
         }}
-      />
-
-      <span
-        className={`world-hotspot-pulse pointer-events-none absolute left-1/2 top-1/2 h-[82%] w-[82%] -translate-x-1/2 -translate-y-1/2 rounded-[28%] ${
-          selected
-            ? "opacity-100"
-            : "opacity-0 group-hover:opacity-55 group-focus-visible:opacity-55"
-        }`}
       />
     </button>
   )
@@ -2808,6 +2807,8 @@ type WorldNodePanelProps = {
   onClose: () => void
   onBack: () => void
   onPrepare: () => void
+  onRelocate?: () => void
+  relocationLoading?: boolean
 }
 
 function WorldNodePanel({
@@ -2818,6 +2819,8 @@ function WorldNodePanel({
   onClose,
   onBack,
   onPrepare,
+  onRelocate,
+  relocationLoading = false,
 }: WorldNodePanelProps) {
   const isPlayerCity =
     node.type === "player_city"
@@ -2984,13 +2987,24 @@ function WorldNodePanel({
 
       <div className="mt-4">
         {isCurrentCity ? (
-          <button
-            type="button"
-            onClick={onBack}
-            className="w-full rounded-xl bg-blue-700 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-600"
-          >
-            🏙️ Retourner dans ma ville
-          </button>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={onBack}
+              className="w-full rounded-xl bg-blue-700 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-600"
+            >
+              🏙️ Ma ville
+            </button>
+
+            <button
+              type="button"
+              onClick={onRelocate}
+              disabled={!onRelocate || relocationLoading}
+              className="w-full rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {relocationLoading ? "Chargement…" : "📍 Déplacer ma ville"}
+            </button>
+          </div>
         ) : isPlayerCity ? (
           <button
             type="button"
