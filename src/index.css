@@ -797,3 +797,148 @@ code {
   opacity: 0.28;
   filter: blur(9px);
 }
+
+/* Crime Empire — World Map reference rebuild (KingShot/Age-style world surface) */
+.world-expanse-base {
+  background-color: #70736f;
+  background-image: url("/world/concrete-ground-tile.webp");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  background-position: 0 0;
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.16);
+}
+
+.world-region-concrete-noise {
+  background:
+    radial-gradient(circle at 22% 31%, rgba(255,255,255,0.035), transparent 18%),
+    radial-gradient(circle at 72% 68%, rgba(0,0,0,0.035), transparent 20%);
+  opacity: 0.55;
+  mix-blend-mode: soft-light;
+}
+
+.world-region-grid,
+.world-region-road,
+.world-region-water,
+.world-region-district,
+.world-region-title-chip,
+.world-distant-city-glow,
+.world-region-edge-label {
+  display: none !important;
+}
+
+.world-fog,
+.world-ambient-glow {
+  display: none !important;
+}
+
+.world-player-city-halo {
+  top: 66% !important;
+  width: 70% !important;
+  height: 24% !important;
+  opacity: 0.72 !important;
+  filter: blur(5px) !important;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0,0,0,0.46) 0%,
+    rgba(0,0,0,0.22) 48%,
+    transparent 75%
+  ) !important;
+  transition: opacity 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.world-player-city-halo.is-current,
+.world-player-city-halo.is-rival {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0,0,0,0.46) 0%,
+    rgba(0,0,0,0.22) 48%,
+    transparent 75%
+  ) !important;
+}
+
+.world-player-city-halo.is-selected {
+  opacity: 0.92 !important;
+  box-shadow: 0 0 28px rgba(250, 204, 21, 0.42);
+  transform: translate(-50%, -50%) scale(1.08) !important;
+}
+
+.world-player-city-asset {
+  filter:
+    drop-shadow(0 12px 8px rgba(0,0,0,0.5))
+    drop-shadow(0 2px 2px rgba(0,0,0,0.35));
+}
+
+.world-player-city-label {
+  line-height: 1;
+  border-color: rgba(255,255,255,0.12) !important;
+  background: rgba(26, 29, 31, 0.88) !important;
+  color: rgba(255,255,255,0.95) !important;
+  text-transform: none !important;
+  box-shadow: 0 5px 10px rgba(0,0,0,0.22) !important;
+}
+
+[data-world-node] .world-player-city-label.border-blue-300\/40 {
+  border-color: rgba(251, 191, 36, 0.34) !important;
+  background: rgba(74, 52, 12, 0.9) !important;
+  color: #fff7d6 !important;
+}
+
+.world-poi-ground {
+  top: 67% !important;
+  width: 62% !important;
+  height: 22% !important;
+  opacity: 0.68;
+  filter: blur(4px);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0,0,0,0.45) 0%,
+    rgba(0,0,0,0.18) 52%,
+    transparent 76%
+  ) !important;
+  box-shadow: none !important;
+}
+
+.world-poi-ground.is-selected {
+  opacity: 0.9;
+  box-shadow: 0 0 24px rgba(250, 204, 21, 0.36) !important;
+}
+
+.world-poi-asset {
+  filter:
+    drop-shadow(0 10px 7px rgba(0,0,0,0.48))
+    drop-shadow(0 2px 2px rgba(0,0,0,0.28));
+  transition: transform 160ms ease;
+}
+
+.world-poi-label {
+  border-color: rgba(255,255,255,0.1) !important;
+  background: rgba(29, 32, 34, 0.86) !important;
+  text-transform: none !important;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2) !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-world-node]:hover .world-player-city-asset,
+  [data-world-node]:hover .world-poi-asset {
+    transform: translateY(-3px) scale(1.035);
+  }
+}
+
+.world-relocation-slot {
+  width: 5.8%;
+  height: 7.2%;
+}
+
+.world-relocation-slot-core {
+  inset: 18%;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 225, 112, 0.92);
+  background: rgba(47, 53, 49, 0.42);
+  box-shadow:
+    0 0 0 5px rgba(255, 215, 64, 0.12),
+    0 0 18px rgba(255, 215, 64, 0.22);
+}
+
+.world-relocation-slot-plus {
+  font-size: 25px;
+}

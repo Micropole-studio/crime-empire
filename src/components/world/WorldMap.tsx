@@ -2222,7 +2222,7 @@ export default function WorldMap({
         </div>
       </div>
 
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/30" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/12 via-transparent to-black/10" />
 
       <header
         data-world-interactive
@@ -2610,10 +2610,6 @@ function WorldRegionTerrain() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
       <span className="world-region-concrete-noise absolute inset-0" />
-      <span className="world-region-road world-region-road-horizontal-a" />
-      <span className="world-region-road world-region-road-horizontal-b" />
-      <span className="world-region-road world-region-road-vertical-a" />
-      <span className="world-region-road world-region-road-vertical-b" />
     </div>
   )
 }
@@ -2653,11 +2649,7 @@ function WorldRelocationSlotsLayer({
 }
 
 function WorldExpanseDecor() {
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="world-region-grid absolute inset-0" />
-    </div>
-  )
+  return null
 }
 
 type WorldNodeMarkerProps = {
@@ -2720,7 +2712,7 @@ function WorldNodeMarker({
         </span>
 
         <span
-          className={`world-player-city-label pointer-events-none absolute left-1/2 top-[79%] min-w-max -translate-x-1/2 rounded-full border px-5 py-2 text-[20px] font-black uppercase tracking-[0.08em] shadow-xl backdrop-blur ${
+          className={`world-player-city-label pointer-events-none absolute left-1/2 top-[82%] min-w-max -translate-x-1/2 rounded-full border px-3 py-1 text-[15px] font-black tracking-[0.04em] shadow-lg backdrop-blur ${
             isCurrent
               ? "border-blue-300/40 bg-blue-950/90 text-blue-100"
               : "border-red-300/30 bg-zinc-950/90 text-red-100"
@@ -2780,7 +2772,7 @@ function WorldNodeMarker({
         </span>
       )}
 
-      <span className="world-poi-label pointer-events-none absolute left-1/2 top-[78%] min-w-max -translate-x-1/2 rounded-full border border-white/10 bg-zinc-950/88 px-4 py-1.5 text-[16px] font-black uppercase tracking-[0.07em] text-white shadow-xl backdrop-blur">
+      <span className="world-poi-label pointer-events-none absolute left-1/2 top-[81%] min-w-max -translate-x-1/2 rounded-full border border-white/10 bg-zinc-950/82 px-3 py-1 text-[14px] font-black tracking-[0.04em] text-white shadow-lg backdrop-blur">
         <span className="mr-1">{node.icon}</span>
         {node.name}
       </span>
