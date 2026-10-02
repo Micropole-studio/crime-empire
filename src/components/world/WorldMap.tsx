@@ -74,6 +74,10 @@ import type {
   WorldOperation,
 } from "../../types/worldOperation"
 
+import type {
+  NewGameNotification,
+} from "../../types/gameNotification"
+
 type Props = {
   onBack: () => void
   onGameChanged: () => Promise<void>
@@ -86,6 +90,7 @@ type Props = {
   currentVillaLevel: number
   commanderLevel: number
   commanderSkills: CommanderSkills
+  onNotify?: (notification: NewGameNotification) => void
 }
 
 type Camera = {
@@ -102,6 +107,20 @@ type Point = {
 type WorldSize = {
   width: number
   height: number
+}
+
+type WorldNoticeTone =
+  | "info"
+  | "success"
+  | "warning"
+  | "danger"
+
+type WorldNotice = {
+  title: string
+  message: string
+  tone: WorldNoticeTone
+  category?: NewGameNotification["category"]
+  data?: Record<string, unknown>
 }
 
 type GestureState = {
@@ -205,6 +224,7 @@ export default function WorldMap({
   currentVillaLevel,
   commanderLevel,
   commanderSkills,
+  onNotify,
 }: Props) {
   const viewportRef =
     useRef<HTMLDivElement | null>(
@@ -315,6 +335,19 @@ export default function WorldMap({
     setCurrentTime,
   ] = useState(() => Date.now())
 
+  const [
+    operationDetailsOpen,
+    setOperationDetailsOpen,
+  ] = useState(false)
+
+  const [
+    worldNotice,
+    setWorldNotice,
+  ] = useState<WorldNotice | null>(null)
+
+  const noticeTimerRef =
+    useRef<number | null>(null)
+
   useEffect(() => {
     if (!cityId) {
       return
@@ -380,6 +413,43 @@ export default function WorldMap({
   const operationProcessingRef =
     useRef(false)
 
+  const showWorldNotice = useCallback(
+    (notice: WorldNotice) => {
+      if (noticeTimerRef.current !== null) {
+        window.clearTimeout(
+          noticeTimerRef.current
+        )
+      }
+
+      setWorldNotice(notice)
+
+      onNotify?.({
+        category: notice.category ?? "world",
+        tone: notice.tone,
+        title: notice.title,
+        message: notice.message,
+        data: notice.data ?? {},
+      })
+
+      noticeTimerRef.current =
+        window.setTimeout(() => {
+          setWorldNotice(null)
+          noticeTimerRef.current = null
+        }, 5200)
+    },
+    [onNotify]
+  )
+
+  useEffect(() => {
+    return () => {
+      if (noticeTimerRef.current !== null) {
+        window.clearTimeout(
+          noticeTimerRef.current
+        )
+      }
+    }
+  }, [])
+
   const persistOperation = useCallback(
     (operation: WorldOperation) => {
       saveWorldOperation(operation)
@@ -417,6 +487,25 @@ export default function WorldMap({
         )
       }
 
+      showWorldNotice({
+        title:
+          result.outcome === "victory"
+            ? "Victoire !"
+            : "Défaite",
+        message:
+          `${operation.targetName} • ${countDeployment(result.casualties)} perte${countDeployment(result.casualties) > 1 ? "s" : ""} • retour en cours`,
+        tone:
+          result.outcome === "victory"
+            ? "success"
+            : "danger",
+        category: "battle",
+        data: {
+          operationId: operation.id,
+          targetNodeId: operation.targetNodeId,
+          outcome: result.outcome,
+        },
+      })
+
       persistOperation({
         ...operation,
         phase: "returning",
@@ -427,7 +516,11 @@ export default function WorldMap({
         ).toISOString(),
       })
     },
-    [cityId, persistOperation]
+    [
+      cityId,
+      persistOperation,
+      showWorldNotice,
+    ]
   )
 
   const giveAssaultOrder = useCallback(
@@ -552,8 +645,21 @@ export default function WorldMap({
     }
 
     persistOperation(operation)
+    setOperationDetailsOpen(false)
     setPreparingNode(null)
     setSelectedNode(null)
+
+    showWorldNotice({
+      title: "Escouade envoyée",
+      message:
+        `${node.name} • arrivée dans ${formatDuration(travelSeconds)}`,
+      tone: "info",
+      category: "world",
+      data: {
+        operationId: operation.id,
+        targetNodeId: node.id,
+      },
+    })
 
     await onGameChanged()
   }
@@ -607,11 +713,21 @@ export default function WorldMap({
       ).toISOString(),
       assaultResolvesAt: undefined,
     })
+
+    setOperationDetailsOpen(false)
+
+    showWorldNotice({
+      title: "Escouade rappelée",
+      message:
+        `Retour prévu dans ${formatDuration(returnSeconds)}`,
+      tone: "warning",
+    })
   }
 
   function closeOperationReport() {
     clearWorldOperation(cityId)
     setActiveOperation(null)
+    setOperationDetailsOpen(false)
   }
 
   const nodes =
@@ -655,6 +771,18 @@ export default function WorldMap({
               ...operation,
               phase: "ready",
             })
+
+            showWorldNotice({
+              title: "Escouade sur zone",
+              message:
+                `${operation.targetName} • ordre d'assaut requis`,
+              tone: "warning",
+              category: "world",
+              data: {
+                operationId: operation.id,
+                targetNodeId: operation.targetNodeId,
+              },
+            })
           }
         }
       }
@@ -695,6 +823,7 @@ export default function WorldMap({
     giveAssaultOrder,
     persistOperation,
     resolveOperationCombat,
+    showWorldNotice,
   ])
 
   useEffect(() => {
@@ -765,6 +894,29 @@ export default function WorldMap({
           returnedOperation
         )
 
+        showWorldNotice({
+          title: "Escouade revenue",
+          message:
+            operation.combatResult?.outcome === "victory"
+              ? `${operation.targetName} • butin sécurisé`
+              : operation.combatResult
+                ? `${operation.targetName} • survivants revenus`
+                : "Tous les hommes rappelés ont rejoint la garnison",
+          tone:
+            operation.combatResult?.outcome === "victory"
+              ? "success"
+              : "info",
+          category:
+            operation.combatResult
+              ? "battle"
+              : "world",
+          data: {
+            operationId: operation.id,
+            targetNodeId: operation.targetNodeId,
+            returned: true,
+          },
+        })
+
         await onGameChanged()
       })
       .catch((error: unknown) => {
@@ -784,6 +936,7 @@ export default function WorldMap({
     onGameChanged,
     persistOperation,
     playerId,
+    showWorldNotice,
   ])
 
   const getScaleLimits =
@@ -1838,14 +1991,11 @@ export default function WorldMap({
           ← Retour à la ville
         </button>
 
-        <div className="pointer-events-auto rounded-xl border border-red-500/25 bg-black/80 px-4 py-2 text-right shadow-xl backdrop-blur-xl">
-          <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-300">
-            Opérations extérieures
-          </p>
-
-          <h1 className="text-lg font-black text-white">
+        <div className="pointer-events-none flex items-center gap-2 rounded-full border border-white/10 bg-black/70 px-3 py-1.5 shadow-xl backdrop-blur-xl">
+          <span aria-hidden="true">🌐</span>
+          <span className="text-xs font-black text-white">
             Carte du monde
-          </h1>
+          </span>
         </div>
       </header>
 
@@ -1890,14 +2040,45 @@ export default function WorldMap({
       </div>
 
       {activeOperation && (
-        <ActiveWorldOperationCard
+        <CompactWorldOperationStatus
           operation={activeOperation}
           currentTime={currentTime}
-          onRecall={recallOperation}
-          onAssault={() =>
-            giveAssaultOrder(activeOperation)
+          onOpen={() =>
+            setOperationDetailsOpen(true)
           }
-          onCloseReport={closeOperationReport}
+        />
+      )}
+
+      {activeOperation &&
+        operationDetailsOpen && (
+          <ActiveWorldOperationCard
+            operation={activeOperation}
+            currentTime={currentTime}
+            onRecall={recallOperation}
+            onAssault={() =>
+              giveAssaultOrder(activeOperation)
+            }
+            onCloseReport={closeOperationReport}
+            onCollapse={() =>
+              setOperationDetailsOpen(false)
+            }
+          />
+        )}
+
+      {worldNotice && (
+        <WorldNoticeToast
+          notice={worldNotice}
+          onDismiss={() =>
+            setWorldNotice(null)
+          }
+          onOpenDetails={
+            activeOperation
+              ? () => {
+                  setWorldNotice(null)
+                  setOperationDetailsOpen(true)
+                }
+              : undefined
+          }
         />
       )}
 
@@ -2391,18 +2572,230 @@ function WorldNodePanel({
   )
 }
 
+function secondsUntilTimestamp(
+  currentTime: number,
+  dateValue?: string
+) {
+  if (!dateValue) {
+    return 0
+  }
+
+  const targetTime =
+    new Date(dateValue).getTime()
+
+  if (!Number.isFinite(targetTime)) {
+    return 0
+  }
+
+  return Math.max(
+    0,
+    Math.ceil(
+      (targetTime - currentTime) /
+        1000
+    )
+  )
+}
+
+function getCompactOperationStatus(
+  operation: WorldOperation,
+  currentTime: number
+) {
+  if (operation.phase === "outbound") {
+    return {
+      label: "En route",
+      detail: formatDuration(
+        secondsUntilTimestamp(
+          currentTime,
+          operation.arrivalAt
+        )
+      ),
+      accent:
+        "border-sky-400/25 bg-sky-500/10 text-sky-100",
+    }
+  }
+
+  if (operation.phase === "ready") {
+    return {
+      label: "Ordre requis",
+      detail: "Assaut prêt",
+      accent:
+        "border-amber-400/30 bg-amber-500/15 text-amber-100",
+    }
+  }
+
+  if (
+    operation.phase ===
+    "assault_preparation"
+  ) {
+    return {
+      label: "Assaut",
+      detail: formatDuration(
+        secondsUntilTimestamp(
+          currentTime,
+          operation.assaultResolvesAt
+        )
+      ),
+      accent:
+        "border-orange-400/30 bg-orange-500/15 text-orange-100",
+    }
+  }
+
+  if (operation.phase === "returning") {
+    return {
+      label:
+        operation.combatResult?.outcome ===
+        "victory"
+          ? "Victoire"
+          : operation.combatResult
+            ? "Retour"
+            : "Rappel",
+      detail: formatDuration(
+        secondsUntilTimestamp(
+          currentTime,
+          operation.returnAt
+        )
+      ),
+      accent:
+        operation.combatResult?.outcome ===
+        "victory"
+          ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
+          : "border-zinc-500/30 bg-zinc-800/80 text-zinc-100",
+    }
+  }
+
+  return {
+    label:
+      operation.combatResult?.outcome ===
+      "victory"
+        ? "Rapport prêt"
+        : "Mission terminée",
+    detail: "Voir le rapport",
+    accent:
+      operation.combatResult?.outcome ===
+      "victory"
+        ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
+        : "border-zinc-500/30 bg-zinc-800/80 text-zinc-100",
+  }
+}
+
+function CompactWorldOperationStatus({
+  operation,
+  currentTime,
+  onOpen,
+}: {
+  operation: WorldOperation
+  currentTime: number
+  onOpen: () => void
+}) {
+  const status =
+    getCompactOperationStatus(
+      operation,
+      currentTime
+    )
+
+  const attention =
+    operation.phase === "ready" ||
+    operation.phase === "returned"
+
+  return (
+    <button
+      type="button"
+      data-world-interactive
+      onClick={onOpen}
+      className={`absolute bottom-4 right-3 z-30 flex h-12 w-12 items-center justify-center rounded-full border shadow-2xl backdrop-blur-xl transition hover:scale-105 sm:right-5 ${status.accent}`}
+      aria-label={`${operation.targetName} — ${status.label} — ${status.detail}`}
+      title={`${operation.targetName} — ${status.label} — ${status.detail}`}
+    >
+      <span className="text-lg">
+        {operation.phase === "outbound" ||
+        operation.phase === "returning"
+          ? "🚁"
+          : operation.targetIcon}
+      </span>
+
+      {attention && (
+        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-white/30 bg-red-600 px-1 text-[9px] font-black text-white">
+          !
+        </span>
+      )}
+
+      <span className="absolute -bottom-1 left-1/2 max-w-[64px] -translate-x-1/2 truncate rounded-full border border-white/10 bg-black/85 px-1.5 py-0.5 text-[7px] font-black text-white/80">
+        {status.detail}
+      </span>
+    </button>
+  )
+}
+
+function WorldNoticeToast({
+  notice,
+  onDismiss,
+  onOpenDetails,
+}: {
+  notice: WorldNotice
+  onDismiss: () => void
+  onOpenDetails?: () => void
+}) {
+  const toneClass =
+    notice.tone === "success"
+      ? "border-emerald-400/30 bg-emerald-950/90"
+      : notice.tone === "danger"
+        ? "border-red-400/30 bg-red-950/90"
+        : notice.tone === "warning"
+          ? "border-amber-400/30 bg-amber-950/90"
+          : "border-sky-400/25 bg-slate-950/90"
+
+  return (
+    <div
+      data-world-interactive
+      className={`absolute left-1/2 top-20 z-40 flex w-[min(430px,calc(100%-24px))] -translate-x-1/2 items-start gap-3 rounded-2xl border p-3 shadow-2xl backdrop-blur-xl ${toneClass}`}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-black text-white">
+          {notice.title}
+        </p>
+        <p className="mt-0.5 text-[11px] font-semibold leading-relaxed text-white/70">
+          {notice.message}
+        </p>
+      </div>
+
+      {onOpenDetails && (
+        <button
+          type="button"
+          onClick={onOpenDetails}
+          className="shrink-0 rounded-lg border border-white/10 bg-white/10 px-2.5 py-1.5 text-[10px] font-black text-white transition hover:bg-white/15"
+        >
+          Voir
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-black text-white/60 transition hover:bg-white/10 hover:text-white"
+        aria-label="Fermer la notification"
+      >
+        ×
+      </button>
+    </div>
+  )
+}
+
 function ActiveWorldOperationCard({
   operation,
   currentTime,
   onRecall,
   onAssault,
   onCloseReport,
+  onCollapse,
 }: {
   operation: WorldOperation
   currentTime: number
   onRecall: () => void
   onAssault: () => void
   onCloseReport: () => void
+  onCollapse: () => void
 }) {
   function secondsUntil(
     dateValue?: string
@@ -2536,6 +2929,15 @@ function ActiveWorldOperationCard({
       data-world-interactive
       className="absolute left-3 top-24 z-30 max-h-[calc(100%-120px)] w-[min(380px,calc(100%-72px))] overflow-y-auto rounded-2xl border border-red-500/25 bg-black/90 p-3 shadow-2xl backdrop-blur-xl sm:left-5 sm:p-4"
     >
+      <button
+        type="button"
+        onClick={onCollapse}
+        className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/60 text-sm font-black text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
+        aria-label="Réduire les détails de l'opération"
+        title="Réduire"
+      >
+        ×
+      </button>
       <div className="flex items-start gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/10 text-xl">
           {operation.targetIcon}

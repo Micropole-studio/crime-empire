@@ -12,6 +12,11 @@ begin;
 alter table public.players
   add column if not exists auth_user_id uuid references auth.users(id) on delete set null;
 
+-- La base historique de Crime Empire ne possédait pas encore de pseudo joueur.
+-- On l'ajoute avant l'index et avant la fonction de bootstrap.
+alter table public.players
+  add column if not exists username text;
+
 alter table public.players
   add column if not exists is_admin boolean not null default false;
 

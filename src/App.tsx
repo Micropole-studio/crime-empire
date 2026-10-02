@@ -59,6 +59,7 @@ import MissionsModal from "./components/MissionsModal"
 import CommanderModal from "./components/CommanderModal"
 import WorldMap from "./components/world/WorldMap"
 import AuthScreen from "./components/auth/AuthScreen"
+import NotificationCenter from "./components/game/NotificationCenter"
 
 import {
   supabase,
@@ -72,6 +73,18 @@ import {
   bootstrapCurrentPlayer,
   DatabaseMigrationRequiredError,
 } from "./services/playerBootstrapService"
+
+import {
+  createGameNotification,
+  loadGameNotifications,
+  markAllGameNotificationsRead,
+  markGameNotificationRead,
+} from "./services/notificationService"
+
+import type {
+  GameNotification,
+  NewGameNotification,
+} from "./types/gameNotification"
 
 type GamePlayer =
   CommanderPlayer & {
@@ -177,6 +190,16 @@ export default function App() {
     )
 
   const [
+    gameNotifications,
+    setGameNotifications,
+  ] = useState<GameNotification[]>([])
+
+  const [
+    notificationCenterOpen,
+    setNotificationCenterOpen,
+  ] = useState(false)
+
+  const [
     mode,
     setMode,
   ] =
@@ -215,7 +238,8 @@ export default function App() {
     useState(false)
 
   function pushNotification(
-    message: string
+    message: string,
+    persistent?: NewGameNotification
   ) {
     setNotifications(
       (previous) => [
@@ -233,6 +257,57 @@ export default function App() {
       },
       3000
     )
+
+    if (
+      playerId &&
+      persistent
+    ) {
+      void createGameNotification(
+        playerId,
+        persistent
+      ).then((created) => {
+        if (!created) {
+          return
+        }
+
+        setGameNotifications(
+          (previous) => [
+            created,
+            ...previous.filter(
+              (item) =>
+                item.id !== created.id
+            ),
+          ].slice(0, 60)
+        )
+      })
+    }
+  }
+
+  function recordPersistentNotification(
+    notification: NewGameNotification
+  ) {
+    if (!playerId) {
+      return
+    }
+
+    void createGameNotification(
+      playerId,
+      notification
+    ).then((created) => {
+      if (!created) {
+        return
+      }
+
+      setGameNotifications(
+        (previous) => [
+          created,
+          ...previous.filter(
+            (item) =>
+              item.id !== created.id
+          ),
+        ].slice(0, 60)
+      )
+    })
   }
 
   function closeAllPanels() {
@@ -558,6 +633,85 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerId])
 
+  useEffect(() => {
+    if (!playerId) {
+      return
+    }
+
+    let cancelled = false
+
+    loadGameNotifications(playerId)
+      .then((items) => {
+        if (!cancelled) {
+          setGameNotifications(items)
+        }
+      })
+      .catch((error) => {
+        console.error(
+          "Impossible de restaurer les notifications :",
+          error
+        )
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [playerId])
+
+  async function handleNotificationRead(
+    notificationId: string
+  ) {
+    setGameNotifications((previous) =>
+      previous.map((item) =>
+        item.id === notificationId
+          ? {
+              ...item,
+              read_at:
+                item.read_at ??
+                new Date().toISOString(),
+            }
+          : item
+      )
+    )
+
+    try {
+      await markGameNotificationRead(
+        notificationId
+      )
+    } catch (error) {
+      console.error(
+        "Impossible de marquer la notification comme lue :",
+        error
+      )
+    }
+  }
+
+  async function handleNotificationsReadAll() {
+    if (!playerId) {
+      return
+    }
+
+    const readAt = new Date().toISOString()
+
+    setGameNotifications((previous) =>
+      previous.map((item) => ({
+        ...item,
+        read_at: item.read_at ?? readAt,
+      }))
+    )
+
+    try {
+      await markAllGameNotificationsRead(
+        playerId
+      )
+    } catch (error) {
+      console.error(
+        "Impossible de marquer les notifications comme lues :",
+        error
+      )
+    }
+  }
+
   async function handleLogout() {
     closeAllPanels()
     setMode("city")
@@ -566,6 +720,8 @@ export default function App() {
     setEffectiveEconomy(null)
     setBootstrapError(null)
     setMigrationRequired(false)
+    setGameNotifications([])
+    setNotificationCenterOpen(false)
 
     try {
       await signOutPlayer()
@@ -735,13 +891,24 @@ export default function App() {
 
     await loadGame()
 
-    pushNotification(
-      `🏗️ ${
-        BUILDING_NAMES[
-          selectedBuilding.type
-        ] ||
+    const buildingName =
+      BUILDING_NAMES[
         selectedBuilding.type
-      } : construction lancée`
+      ] ||
+      selectedBuilding.type
+
+    pushNotification(
+      `🏗️ ${buildingName} : construction lancée`,
+      {
+        category: "building",
+        tone: "info",
+        title: "Construction lancée",
+        message: buildingName,
+        data: {
+          buildingId: selectedBuilding.id,
+          buildingType: selectedBuilding.type,
+        },
+      }
     )
   }
 
@@ -1073,8 +1240,26 @@ export default function App() {
           commanderSkills={
             data.commanderSkills
           }
+          onNotify={
+            recordPersistentNotification
+          }
         />
       )}
+
+      <NotificationCenter
+        notifications={gameNotifications}
+        open={notificationCenterOpen}
+        onToggle={() =>
+          setNotificationCenterOpen(
+            (value) => !value
+          )
+        }
+        onClose={() =>
+          setNotificationCenterOpen(false)
+        }
+        onMarkRead={handleNotificationRead}
+        onMarkAllRead={handleNotificationsReadAll}
+      />
 
       {mode === "editor" &&
         Boolean(data.player.is_admin) && (
@@ -1107,6 +1292,9 @@ export default function App() {
                 String(
                   data.city.id
                 )
+              }
+              isAdmin={
+                Boolean(data.player.is_admin)
               }
             />
           </div>

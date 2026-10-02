@@ -47,6 +47,7 @@ import {
 
 type Props = {
   cityId: string
+  isAdmin?: boolean
 
   onSave?: (
     placement: BuildingPlacement
@@ -102,6 +103,7 @@ function getObjectName(
 
 export default function MapEditor({
   cityId,
+  isAdmin = false,
   onSave,
 }: Props) {
   const [
@@ -111,32 +113,24 @@ export default function MapEditor({
     EditorObjectType
   >("villa")
 
-  const initialPlacementsRef =
-    useRef<BuildingPlacements>(
-      loadBuildingPlacements(
-        cityId
-      )
-    )
-
-  const initialHelicopterRef =
-    useRef<WorldMapAccessPlacement>(
-      loadWorldMapAccessPlacement(
-        cityId
-      )
-    )
-
   const [
     placements,
     setPlacements,
   ] = useState<BuildingPlacements>(
-    initialPlacementsRef.current
+    () =>
+      loadBuildingPlacements(
+        cityId
+      )
   )
 
   const [
     helicopterPlacement,
     setHelicopterPlacement,
   ] = useState<WorldMapAccessPlacement>(
-    initialHelicopterRef.current
+    () =>
+      loadWorldMapAccessPlacement(
+        cityId
+      )
   )
 
   const [
@@ -472,6 +466,15 @@ export default function MapEditor({
   }
 
   async function handleReset() {
+    if (
+      isAdmin &&
+      !window.confirm(
+        "Réinitialiser la ville DEV ? Cette disposition deviendra aussi le modèle des nouveaux joueurs après publication."
+      )
+    ) {
+      return
+    }
+
     const defaults =
       resetBuildingPlacements(
         cityId
@@ -643,17 +646,28 @@ export default function MapEditor({
             }
             className="rounded-lg border border-green-500/30 bg-green-700 px-4 py-2 text-sm font-black text-white transition hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-zinc-700"
           >
-            Publier les positions
+            {isAdmin
+              ? "Publier le modèle"
+              : "Publier les positions"}
           </button>
         </div>
       </div>
 
-      <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
-        Les bâtiments et l'hélicoptère
-        sont maintenant enregistrés dans
-        Supabase. Leur position reste la
-        même sur ordinateur, téléphone
-        et après un déploiement Vercel.
+      <div className={`rounded-xl border px-4 py-3 text-sm ${
+        isAdmin
+          ? "border-amber-500/25 bg-amber-500/10 text-amber-100"
+          : "border-cyan-500/20 bg-cyan-500/10 text-cyan-100"
+      }`}>
+        {isAdmin ? (
+          <>
+            <strong>Modèle officiel des nouvelles villes.</strong>{" "}
+            Chaque déplacement publié ici est sauvegardé dans Supabase et devient la disposition de départ des futurs joueurs. Leur ville restera ensuite indépendante.
+          </>
+        ) : (
+          <>
+            Les bâtiments et l'hélicoptère sont enregistrés dans Supabase. Leur position reste identique sur ordinateur, téléphone et après un déploiement Vercel.
+          </>
+        )}
       </div>
 
       <div
