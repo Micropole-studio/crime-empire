@@ -50,7 +50,9 @@ export async function loadSharedWorldMapAccess(
   cityId: string
 ): Promise<SharedWorldMapAccessResult> {
   const localPlacement =
-    loadWorldMapAccessPlacement()
+    loadWorldMapAccessPlacement(
+      cityId
+    )
 
   if (!cityId) {
     return {
@@ -117,7 +119,8 @@ export async function loadSharedWorldMapAccess(
     })
 
   saveWorldMapAccessPlacement(
-    placement
+    placement,
+    cityId
   )
 
   notifyWorldMapAccessUpdated(
@@ -192,7 +195,8 @@ export async function saveSharedWorldMapAccess(
     })
 
   saveWorldMapAccessPlacement(
-    synchronized
+    synchronized,
+    cityId
   )
 
   notifyWorldMapAccessUpdated(

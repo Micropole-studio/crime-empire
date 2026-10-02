@@ -3,6 +3,10 @@ import {
   useState,
 } from "react"
 
+import type {
+  Session,
+} from "@supabase/supabase-js"
+
 import {
   getPlayerCity,
 } from "./services/gameData"
@@ -20,6 +24,7 @@ import {
 } from "./data/commanderBonuses"
 
 import type {
+  CommanderPlayer,
   CommanderSkills,
 } from "./types/commander"
 
@@ -53,10 +58,37 @@ import InventoryModal from "./components/InventoryModal"
 import MissionsModal from "./components/MissionsModal"
 import CommanderModal from "./components/CommanderModal"
 import WorldMap from "./components/world/WorldMap"
+import AuthScreen from "./components/auth/AuthScreen"
+
+import {
+  supabase,
+} from "./services/supabase"
+
+import {
+  signOutPlayer,
+} from "./services/authService"
+
+import {
+  bootstrapCurrentPlayer,
+  DatabaseMigrationRequiredError,
+} from "./services/playerBootstrapService"
+
+type GamePlayer =
+  CommanderPlayer & {
+    is_admin?: boolean | null
+  }
+
+type GameCity = {
+  id: string
+  money: number
+  materials: number
+  influence: number
+  equipment: number
+}
 
 type GameData = {
-  player: any
-  city: any
+  player: GamePlayer
+  city: GameCity
   buildings: Building[]
   commanderSkills: CommanderSkills
 }
@@ -96,6 +128,31 @@ export default function App() {
     useState(true)
 
   const [
+    authReady,
+    setAuthReady,
+  ] = useState(false)
+
+  const [
+    session,
+    setSession,
+  ] = useState<Session | null>(null)
+
+  const [
+    playerId,
+    setPlayerId,
+  ] = useState<string | null>(null)
+
+  const [
+    bootstrapError,
+    setBootstrapError,
+  ] = useState<string | null>(null)
+
+  const [
+    migrationRequired,
+    setMigrationRequired,
+  ] = useState(false)
+
+  const [
     effectiveEconomy,
     setEffectiveEconomy,
   ] =
@@ -126,9 +183,6 @@ export default function App() {
     useState<GameMode>(
       "city"
     )
-
-  const email =
-    "test@test.com"
 
   const [
     isResearchModalOpen,
@@ -256,6 +310,10 @@ export default function App() {
   }
 
   function openEditor() {
+    if (!data?.player?.is_admin) {
+      return
+    }
+
     closeAllPanels()
 
     setMode(
@@ -263,11 +321,21 @@ export default function App() {
     )
   }
 
-  async function loadGame() {
+  async function loadGame(
+    requestedPlayerId?: string
+  ) {
+    const activePlayerId =
+      requestedPlayerId ??
+      playerId
+
+    if (!activePlayerId) {
+      return
+    }
+
     try {
       const initialResult =
         await getPlayerCity(
-          email
+          activePlayerId
         )
 
       await syncBuildings(
@@ -276,7 +344,7 @@ export default function App() {
 
       const synchronizedResult =
         await getPlayerCity(
-          email
+          activePlayerId
         )
 
       const economyResult =
@@ -287,7 +355,7 @@ export default function App() {
 
       const refreshed =
         await getPlayerCity(
-          email
+          activePlayerId
         )
 
       const baseRates =
@@ -351,12 +419,132 @@ export default function App() {
   }
 
   useEffect(() => {
-    loadGame()
+    let active = true
+
+    supabase.auth
+      .getSession()
+      .then(({ data: sessionData }) => {
+        if (!active) {
+          return
+        }
+
+        setSession(
+          sessionData.session
+        )
+        setAuthReady(true)
+      })
+      .catch((error) => {
+        console.error(
+          "Impossible de restaurer la session Supabase :",
+          error
+        )
+
+        if (active) {
+          setSession(null)
+          setAuthReady(true)
+        }
+      })
+
+    const {
+      data: authListener,
+    } = supabase.auth.onAuthStateChange(
+      (_event, nextSession) => {
+        if (!active) {
+          return
+        }
+
+        setSession(nextSession)
+        setAuthReady(true)
+      }
+    )
+
+    return () => {
+      active = false
+      authListener.subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    const user = session?.user
+
+    if (!authReady) {
+      return
+    }
+
+    if (!user) {
+      return
+    }
+
+    const authenticatedUser = user
+    let cancelled = false
+
+    async function initializeAuthenticatedGame() {
+      setLoading(true)
+      setBootstrapError(null)
+      setMigrationRequired(false)
+
+      try {
+        const bootstrap =
+          await bootstrapCurrentPlayer(authenticatedUser)
+
+        if (cancelled) {
+          return
+        }
+
+        setPlayerId(bootstrap.player_id)
+
+        await loadGame(
+          bootstrap.player_id
+        )
+      } catch (error) {
+        console.error(
+          "Impossible d'initialiser la partie authentifiée :",
+          error
+        )
+
+        if (cancelled) {
+          return
+        }
+
+        setData(null)
+        setLoading(false)
+
+        if (
+          error instanceof
+          DatabaseMigrationRequiredError
+        ) {
+          setMigrationRequired(true)
+          setBootstrapError(
+            "La base Supabase doit d'abord recevoir la migration Player Auth MVP fournie dans le ZIP."
+          )
+        } else {
+          setBootstrapError(
+            error instanceof Error
+              ? error.message
+              : "Impossible de préparer cette partie joueur."
+          )
+        }
+      }
+    }
+
+    initializeAuthenticatedGame()
+
+    return () => {
+      cancelled = true
+    }
+  // loadGame is deliberately invoked with the freshly bootstrapped player id.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authReady, session?.user])
+
+  useEffect(() => {
+    if (!playerId) {
+      return
+    }
 
     const interval =
       window.setInterval(
         () => {
-          loadGame()
+          loadGame(playerId)
         },
         10000
       )
@@ -366,7 +554,81 @@ export default function App() {
         interval
       )
     }
-  }, [])
+  // The interval always passes the current playerId explicitly.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerId])
+
+  async function handleLogout() {
+    closeAllPanels()
+    setMode("city")
+    setPlayerId(null)
+    setData(null)
+    setEffectiveEconomy(null)
+    setBootstrapError(null)
+    setMigrationRequired(false)
+
+    try {
+      await signOutPlayer()
+    } catch (error) {
+      console.error(
+        "Impossible de se déconnecter :",
+        error
+      )
+    }
+  }
+
+  if (!authReady) {
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-black text-sm font-black uppercase tracking-[0.25em] text-zinc-300">
+        Crime Empire…
+      </div>
+    )
+  }
+
+  if (!session) {
+    return <AuthScreen />
+  }
+
+  if (bootstrapError) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-black px-4 text-white">
+        <div className="w-full max-w-xl rounded-2xl border border-red-900/40 bg-zinc-950 p-6 shadow-2xl">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-red-400">
+            Configuration joueur
+          </p>
+          <h1 className="mt-2 text-2xl font-black">
+            Impossible de préparer la partie
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-zinc-300">
+            {bootstrapError}
+          </p>
+
+          {migrationRequired && (
+            <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-950/20 p-4 text-sm leading-6 text-amber-100">
+              Exécute le fichier <strong>supabase/migrations/20261002_player_auth_mvp.sql</strong> dans le SQL Editor Supabase, puis recharge la page.
+            </div>
+          )}
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="rounded-xl bg-red-700 px-4 py-2 text-sm font-black hover:bg-red-600"
+            >
+              Réessayer
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-black hover:bg-zinc-800"
+            >
+              Se déconnecter
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (
     loading ||
@@ -374,7 +636,7 @@ export default function App() {
   ) {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-black text-white">
-        Loading Crime Empire...
+        Préparation de ton empire…
       </div>
     )
   }
@@ -741,19 +1003,26 @@ export default function App() {
                 onMissionsClick={
                   openMissions
                 }
+                onLogoutClick={
+                  handleLogout
+                }
               />
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={
-              openEditor
-            }
-            className="absolute bottom-4 left-4 z-[900] hidden rounded-xl border border-blue-500/30 bg-zinc-950/85 px-4 py-2 text-sm font-black text-blue-200 shadow-xl backdrop-blur transition hover:bg-blue-950 lg:block"
-          >
-            🛠️ Éditeur de ville
-          </button>
+          {Boolean(
+            data.player.is_admin
+          ) && (
+            <button
+              type="button"
+              onClick={
+                openEditor
+              }
+              className="absolute bottom-4 left-4 z-[900] hidden rounded-xl border border-blue-500/30 bg-zinc-950/85 px-4 py-2 text-sm font-black text-blue-200 shadow-xl backdrop-blur transition hover:bg-blue-950 lg:block"
+            >
+              🛠️ Éditeur de ville
+            </button>
+          )}
 
           <MobileBottomNavigation
             onCity={
@@ -767,6 +1036,9 @@ export default function App() {
             }
             onMissions={
               openMissions
+            }
+            onLogout={
+              handleLogout
             }
           />
         </>
@@ -804,7 +1076,8 @@ export default function App() {
         />
       )}
 
-      {mode === "editor" && (
+      {mode === "editor" &&
+        Boolean(data.player.is_admin) && (
         <div className="h-full overflow-y-auto bg-black p-4 pb-16 text-white md:p-6">
           <div className="mx-auto max-w-7xl">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -848,6 +1121,7 @@ type MobileBottomNavigationProps = {
   onInventory: () => void
   onTroops: () => void
   onMissions: () => void
+  onLogout: () => void
 }
 
 function MobileBottomNavigation({
@@ -855,9 +1129,10 @@ function MobileBottomNavigation({
   onInventory,
   onTroops,
   onMissions,
+  onLogout,
 }: MobileBottomNavigationProps) {
   return (
-    <nav className="absolute inset-x-2 bottom-2 z-[950] grid grid-cols-4 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 p-1.5 shadow-2xl backdrop-blur-xl lg:hidden">
+    <nav className="absolute inset-x-2 bottom-2 z-[950] grid grid-cols-5 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 p-1.5 shadow-2xl backdrop-blur-xl lg:hidden">
       <MobileNavButton
         icon="🏙️"
         label="Ville"
@@ -888,6 +1163,14 @@ function MobileBottomNavigation({
         label="Missions"
         onClick={
           onMissions
+        }
+      />
+
+      <MobileNavButton
+        icon="⏻"
+        label="Quitter"
+        onClick={
+          onLogout
         }
       />
     </nav>

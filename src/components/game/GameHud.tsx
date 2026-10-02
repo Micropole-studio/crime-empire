@@ -18,6 +18,7 @@ type Props = {
   onInventoryClick?: () => void
   onTroopsClick?: () => void
   onMissionsClick?: () => void
+  onLogoutClick?: () => void
 }
 
 function formatCompactNumber(
@@ -135,6 +136,7 @@ export default function GameHud({
   onInventoryClick,
   onTroopsClick,
   onMissionsClick,
+  onLogoutClick,
 }: Props) {
   const safeCommanderLevel =
     Math.max(
@@ -304,6 +306,14 @@ export default function GameHud({
             label="Missions"
             onClick={
               onMissionsClick
+            }
+          />
+
+          <HudIconButton
+            icon="⏻"
+            label="Déconnexion"
+            onClick={
+              onLogoutClick
             }
           />
         </nav>

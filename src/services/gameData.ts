@@ -32,15 +32,21 @@ function createDefaultCommanderSkills(
 }
 
 export async function getPlayerCity(
-  email: string
+  playerId: string
 ) {
+  if (!playerId) {
+    throw new Error(
+      "Impossible de charger la partie : Player ID manquant"
+    )
+  }
+
   const {
     data: player,
     error: playerError,
   } = await supabase
     .from("players")
     .select("*")
-    .eq("email", email)
+    .eq("id", playerId)
     .single()
 
   if (

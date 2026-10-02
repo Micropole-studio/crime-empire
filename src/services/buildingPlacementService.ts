@@ -130,7 +130,9 @@ export async function loadSharedBuildingPlacements(
   cityId: string
 ): Promise<SharedPlacementsResult> {
   const localPlacements =
-    loadBuildingPlacements()
+    loadBuildingPlacements(
+      cityId
+    )
 
   if (!cityId) {
     return {
@@ -191,7 +193,8 @@ export async function loadSharedBuildingPlacements(
    * en cas de coupure réseau.
    */
   saveBuildingPlacements(
-    placements
+    placements,
+    cityId
   )
 
   notifyPlacementsUpdated(
@@ -251,7 +254,8 @@ export async function saveSharedBuildingPlacements(
     )
 
   saveBuildingPlacements(
-    synchronized
+    synchronized,
+    cityId
   )
 
   notifyPlacementsUpdated(

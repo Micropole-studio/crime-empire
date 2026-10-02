@@ -171,7 +171,9 @@ export default function GameMap({
     setPlacements,
   ] = useState<BuildingPlacements>(
     () =>
-      loadBuildingPlacements()
+      loadBuildingPlacements(
+        cityId
+      )
   )
 
 
@@ -180,7 +182,9 @@ export default function GameMap({
     setHelicopterPlacement,
   ] = useState<WorldMapAccessPlacement>(
     () =>
-      loadWorldMapAccessPlacement()
+      loadWorldMapAccessPlacement(
+        cityId
+      )
   )
 
   const [

@@ -18,6 +18,14 @@ export const WORLD_MAP_HELICOPTER_DEFAULT_PLACEMENT:
 const STORAGE_KEY =
   "crime-empire:world-map-helicopter-placement"
 
+function getStorageKey(cityId?: string) {
+  const normalizedCityId = cityId?.trim()
+
+  return normalizedCityId
+    ? `${STORAGE_KEY}:${normalizedCityId}`
+    : STORAGE_KEY
+}
+
 function getFiniteNumber(
   value: unknown,
   fallback: number
@@ -105,7 +113,9 @@ export function normalizeWorldMapAccessPlacement(
   }
 }
 
-export function loadWorldMapAccessPlacement() {
+export function loadWorldMapAccessPlacement(
+  cityId?: string
+) {
   if (
     typeof window ===
     "undefined"
@@ -118,7 +128,7 @@ export function loadWorldMapAccessPlacement() {
   try {
     const rawValue =
       window.localStorage.getItem(
-        STORAGE_KEY
+        getStorageKey(cityId)
       )
 
     if (!rawValue) {
@@ -146,7 +156,8 @@ export function loadWorldMapAccessPlacement() {
 
 export function saveWorldMapAccessPlacement(
   placement:
-    WorldMapAccessPlacement
+    WorldMapAccessPlacement,
+  cityId?: string
 ) {
   const normalized =
     normalizeWorldMapAccessPlacement(
@@ -158,7 +169,7 @@ export function saveWorldMapAccessPlacement(
     "undefined"
   ) {
     window.localStorage.setItem(
-      STORAGE_KEY,
+      getStorageKey(cityId),
       JSON.stringify(
         normalized
       )
@@ -168,13 +179,16 @@ export function saveWorldMapAccessPlacement(
   return normalized
 }
 
-export function resetWorldMapAccessPlacement() {
+export function resetWorldMapAccessPlacement(
+  cityId?: string
+) {
   const defaults = {
     ...WORLD_MAP_HELICOPTER_DEFAULT_PLACEMENT,
   }
 
   saveWorldMapAccessPlacement(
-    defaults
+    defaults,
+    cityId
   )
 
   return defaults

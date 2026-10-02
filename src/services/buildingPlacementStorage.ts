@@ -7,12 +7,24 @@ import type {
 const PLACEMENTS_STORAGE_KEY =
   "crime_empire_map_placements"
 
+function getStorageKey(
+  cityId?: string
+) {
+  const normalizedCityId =
+    cityId?.trim()
+
+  return normalizedCityId
+    ? `${PLACEMENTS_STORAGE_KEY}:${normalizedCityId}`
+    : PLACEMENTS_STORAGE_KEY
+}
+
 export function saveBuildingPlacements(
-  placements: BuildingPlacements
+  placements: BuildingPlacements,
+  cityId?: string
 ) {
   try {
     localStorage.setItem(
-      PLACEMENTS_STORAGE_KEY,
+      getStorageKey(cityId),
       JSON.stringify(placements)
     )
   } catch (error) {
@@ -23,11 +35,30 @@ export function saveBuildingPlacements(
   }
 }
 
-export function loadBuildingPlacements(): BuildingPlacements {
+export function loadBuildingPlacements(
+  cityId?: string
+): BuildingPlacements {
   try {
-    const raw = localStorage.getItem(
-      PLACEMENTS_STORAGE_KEY
-    )
+    const scopedKey =
+      getStorageKey(cityId)
+
+    let raw =
+      localStorage.getItem(
+        scopedKey
+      )
+
+    /*
+     * Migration douce : l'ancienne version du jeu
+     * stockait une seule disposition pour tout le
+     * navigateur. On ne la récupère que si aucun
+     * cityId n'est fourni. Un nouveau joueur ne doit
+     * jamais hériter de la disposition locale DEV.
+     */
+    if (!raw && !cityId) {
+      raw = localStorage.getItem(
+        PLACEMENTS_STORAGE_KEY
+      )
+    }
 
     if (!raw) {
       return structuredClone(
@@ -93,9 +124,11 @@ export function loadBuildingPlacements(): BuildingPlacements {
   }
 }
 
-export function resetBuildingPlacements(): BuildingPlacements {
+export function resetBuildingPlacements(
+  cityId?: string
+): BuildingPlacements {
   localStorage.removeItem(
-    PLACEMENTS_STORAGE_KEY
+    getStorageKey(cityId)
   )
 
   return structuredClone(

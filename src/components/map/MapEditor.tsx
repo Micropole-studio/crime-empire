@@ -113,12 +113,16 @@ export default function MapEditor({
 
   const initialPlacementsRef =
     useRef<BuildingPlacements>(
-      loadBuildingPlacements()
+      loadBuildingPlacements(
+        cityId
+      )
     )
 
   const initialHelicopterRef =
     useRef<WorldMapAccessPlacement>(
-      loadWorldMapAccessPlacement()
+      loadWorldMapAccessPlacement(
+        cityId
+      )
     )
 
   const [
@@ -358,10 +362,13 @@ export default function MapEditor({
       "helicopter"
     ) {
       const updatedHelicopter =
-        saveWorldMapAccessPlacement({
-          ...helicopterPlacement,
-          ...changes,
-        })
+        saveWorldMapAccessPlacement(
+          {
+            ...helicopterPlacement,
+            ...changes,
+          },
+          cityId
+        )
 
       setHelicopterPlacement(
         updatedHelicopter
@@ -400,7 +407,8 @@ export default function MapEditor({
     )
 
     saveBuildingPlacements(
-      updatedPlacements
+      updatedPlacements,
+      cityId
     )
 
     scheduleRemoteSave(
@@ -465,10 +473,14 @@ export default function MapEditor({
 
   async function handleReset() {
     const defaults =
-      resetBuildingPlacements()
+      resetBuildingPlacements(
+        cityId
+      )
 
     const helicopterDefaults =
-      resetWorldMapAccessPlacement()
+      resetWorldMapAccessPlacement(
+        cityId
+      )
 
     setPlacements(
       defaults
