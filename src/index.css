@@ -1017,3 +1017,41 @@ code {
   justify-content: center;
   padding: 0 8px;
 }
+
+/* Crime Empire — éditeur admin du gabarit visuel des villes World Map */
+.world-player-city-render-layer {
+  transform-origin: 50% 50%;
+  transition:
+    left 100ms ease,
+    top 100ms ease,
+    transform 100ms ease;
+}
+
+.world-city-template-guide {
+  width: 11.5%;
+  height: 12%;
+  border: 3px dashed rgba(253, 230, 138, 0.88);
+  border-radius: 12%;
+  background: rgba(245, 158, 11, 0.045);
+  box-shadow:
+    inset 0 0 28px rgba(245, 158, 11, 0.06),
+    0 0 22px rgba(245, 158, 11, 0.12);
+}
+
+.world-city-template-guide > span {
+  position: absolute;
+  left: 50%;
+  bottom: -32px;
+  transform: translateX(-50%);
+  min-width: max-content;
+  border: 1px solid rgba(253, 230, 138, 0.34);
+  border-radius: 999px;
+  background: rgba(9, 9, 11, 0.88);
+  padding: 5px 10px;
+  color: rgba(254, 243, 199, 0.94);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.32);
+}

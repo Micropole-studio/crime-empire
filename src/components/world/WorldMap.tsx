@@ -25,6 +25,10 @@ import {
   getWorldDistanceKm,
 } from "../../data/worldLayout"
 
+import {
+  DEFAULT_WORLD_CITY_RENDER_TEMPLATE,
+} from "../../data/worldCityRenderTemplate"
+
 import WorldOperationPanel from "./WorldOperationPanel"
 
 import {
@@ -58,6 +62,12 @@ import {
   MultiplayerWorldMigrationRequiredError,
   relocateCurrentWorldPosition,
 } from "../../services/worldMultiplayerService"
+
+import {
+  loadWorldCityRenderTemplate,
+  saveWorldCityRenderTemplate,
+  WorldCityRenderTemplateMigrationRequiredError,
+} from "../../services/worldCityRenderTemplateService"
 
 import type {
   Building,
@@ -97,6 +107,10 @@ import type {
   WorldSpawnSlot,
 } from "../../types/worldPlayer"
 
+import type {
+  WorldCityRenderTemplate,
+} from "../../types/worldCityRenderTemplate"
+
 type Props = {
   onBack: () => void
   onGameChanged: () => Promise<void>
@@ -109,6 +123,7 @@ type Props = {
   currentVillaLevel: number
   commanderLevel: number
   commanderSkills: CommanderSkills
+  isAdmin: boolean
   onNotify?: (notification: NewGameNotification) => void
 }
 
@@ -262,6 +277,7 @@ export default function WorldMap({
   currentVillaLevel,
   commanderLevel,
   commanderSkills,
+  isAdmin,
   onNotify,
 }: Props) {
   const viewportRef =
@@ -350,6 +366,40 @@ export default function WorldMap({
   const [
     relocationError,
     setRelocationError,
+  ] = useState<string | null>(null)
+
+  const [
+    cityRenderTemplate,
+    setCityRenderTemplate,
+  ] = useState<WorldCityRenderTemplate>(
+    DEFAULT_WORLD_CITY_RENDER_TEMPLATE
+  )
+
+  const [
+    cityRenderDraft,
+    setCityRenderDraft,
+  ] = useState<WorldCityRenderTemplate>(
+    DEFAULT_WORLD_CITY_RENDER_TEMPLATE
+  )
+
+  const [
+    cityRenderEditorOpen,
+    setCityRenderEditorOpen,
+  ] = useState(false)
+
+  const [
+    cityRenderTemplateLoading,
+    setCityRenderTemplateLoading,
+  ] = useState(true)
+
+  const [
+    cityRenderTemplateSaving,
+    setCityRenderTemplateSaving,
+  ] = useState(false)
+
+  const [
+    cityRenderTemplateError,
+    setCityRenderTemplateError,
   ] = useState<string | null>(null)
 
   const focusedOnCurrentCityRef =
@@ -496,6 +546,92 @@ export default function WorldMap({
       setMultiplayerLoading(false)
     }
   }, [])
+
+  const refreshCityRenderTemplate = useCallback(async () => {
+    setCityRenderTemplateLoading(true)
+
+    try {
+      const template = await loadWorldCityRenderTemplate()
+      setCityRenderTemplate(template)
+      setCityRenderDraft(template)
+      setCityRenderTemplateError(null)
+    } catch (error) {
+      if (
+        error instanceof
+        WorldCityRenderTemplateMigrationRequiredError
+      ) {
+        setCityRenderTemplateError(
+          "Migration World City Render Template requise dans Supabase."
+        )
+      } else {
+        setCityRenderTemplateError(
+          error instanceof Error
+            ? error.message
+            : "Impossible de charger le gabarit visuel des villes"
+        )
+      }
+    } finally {
+      setCityRenderTemplateLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void refreshCityRenderTemplate()
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [refreshCityRenderTemplate])
+
+  const openCityRenderEditor = useCallback(() => {
+    setCityRenderDraft(cityRenderTemplate)
+    setCityRenderEditorOpen(true)
+    setRelocationMode(false)
+    setRelocationSlots([])
+    setRelocationError(null)
+  }, [cityRenderTemplate])
+
+  const closeCityRenderEditor = useCallback(() => {
+    setCityRenderDraft(cityRenderTemplate)
+    setCityRenderEditorOpen(false)
+    setCityRenderTemplateError(null)
+  }, [cityRenderTemplate])
+
+  const saveCityRenderEditor = useCallback(async () => {
+    if (!isAdmin) {
+      return
+    }
+
+    setCityRenderTemplateSaving(true)
+    setCityRenderTemplateError(null)
+
+    try {
+      const saved = await saveWorldCityRenderTemplate(
+        cityRenderDraft
+      )
+
+      setCityRenderTemplate(saved)
+      setCityRenderDraft(saved)
+      setCityRenderEditorOpen(false)
+      setWorldNotice({
+        title: "Gabarit ville enregistré",
+        message:
+          "Le même placement sera maintenant utilisé pour toutes les villes de la World Map.",
+        tone: "success",
+        category: "world",
+      })
+    } catch (error) {
+      setCityRenderTemplateError(
+        error instanceof Error
+          ? error.message
+          : "Impossible d'enregistrer le gabarit visuel"
+      )
+    } finally {
+      setCityRenderTemplateSaving(false)
+    }
+  }, [cityRenderDraft, isAdmin])
 
   const startRelocationMode = useCallback(async () => {
     setRelocationLoading(true)
@@ -1032,6 +1168,11 @@ export default function WorldMap({
     () => [...staticNodes, ...playerNodes],
     [playerNodes, staticNodes]
   )
+
+  const effectiveCityRenderTemplate =
+    cityRenderEditorOpen && isAdmin
+      ? cityRenderDraft
+      : cityRenderTemplate
 
   useEffect(() => {
     const operation = activeOperation
@@ -2189,6 +2330,15 @@ export default function WorldMap({
             />
           )}
 
+          {cityRenderEditorOpen &&
+            isAdmin &&
+            currentWorldPlayer && (
+              <WorldCityTemplateGuide
+                x={currentWorldPlayer.x}
+                y={currentWorldPlayer.y}
+              />
+            )}
+
           {nodes.map(
             (node) => (
               <WorldNodeMarker
@@ -2201,6 +2351,9 @@ export default function WorldMap({
                 selected={
                   selectedNode?.id ===
                   node.id
+                }
+                cityRenderTemplate={
+                  effectiveCityRenderTemplate
                 }
                 onSelect={() => {
                   if (
@@ -2327,7 +2480,39 @@ export default function WorldMap({
         >
           ⌂
         </WorldControlButton>
+
+        {isAdmin && (
+          <WorldControlButton
+            label="Régler le gabarit global des villes"
+            onClick={
+              cityRenderEditorOpen
+                ? closeCityRenderEditor
+                : openCityRenderEditor
+            }
+          >
+            🛠
+          </WorldControlButton>
+        )}
       </div>
+
+      {cityRenderEditorOpen && isAdmin && (
+        <WorldCityRenderEditor
+          value={cityRenderDraft}
+          loading={cityRenderTemplateLoading}
+          saving={cityRenderTemplateSaving}
+          error={cityRenderTemplateError}
+          onChange={setCityRenderDraft}
+          onReset={() =>
+            setCityRenderDraft(
+              DEFAULT_WORLD_CITY_RENDER_TEMPLATE
+            )
+          }
+          onSave={() => {
+            void saveCityRenderEditor()
+          }}
+          onClose={closeCityRenderEditor}
+        />
+      )}
 
       <div className="pointer-events-none absolute bottom-3 left-3 z-20 hidden rounded-full border border-white/10 bg-black/70 px-3 py-1.5 text-[10px] font-bold text-white/80 backdrop-blur sm:block">
         Glisser pour explorer • pincer à 2 doigts pour zoomer • relâcher pour l'inertie
@@ -2636,15 +2821,227 @@ function WorldRelocationSlotsLayer({
   )
 }
 
+type WorldCityTemplateGuideProps = {
+  x: number
+  y: number
+}
+
+function WorldCityTemplateGuide({
+  x,
+  y,
+}: WorldCityTemplateGuideProps) {
+  return (
+    <div
+      className="world-city-template-guide pointer-events-none absolute z-[18]"
+      style={{
+        left: `${x}%`,
+        top: `${y}%`,
+        transform: "translate(-50%, -50%)",
+      }}
+    >
+      <span>PARCELLE MODÈLE</span>
+    </div>
+  )
+}
+
+type WorldCityRenderEditorProps = {
+  value: WorldCityRenderTemplate
+  loading: boolean
+  saving: boolean
+  error: string | null
+  onChange: (value: WorldCityRenderTemplate) => void
+  onReset: () => void
+  onSave: () => void
+  onClose: () => void
+}
+
+function WorldCityRenderEditor({
+  value,
+  loading,
+  saving,
+  error,
+  onChange,
+  onReset,
+  onSave,
+  onClose,
+}: WorldCityRenderEditorProps) {
+  function update<K extends keyof WorldCityRenderTemplate>(
+    key: K,
+    nextValue: WorldCityRenderTemplate[K]
+  ) {
+    onChange({
+      ...value,
+      [key]: nextValue,
+    })
+  }
+
+  return (
+    <section
+      data-world-interactive
+      className="absolute left-3 top-24 z-50 w-[min(360px,calc(100vw-24px))] max-h-[calc(100vh-120px)] overflow-y-auto rounded-2xl border border-amber-300/25 bg-zinc-950/95 p-4 shadow-2xl backdrop-blur-xl"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-200">
+            Gabarit global des villes
+          </p>
+          <p className="mt-1 text-[10px] font-bold leading-relaxed text-zinc-400">
+            Règle ta ville admin dans sa parcelle. Le même rendu sera appliqué à toutes les villes joueurs.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-black text-white hover:bg-white/10"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        <WorldTemplateSlider
+          label="Horizontal"
+          value={value.offsetX}
+          min={-80}
+          max={80}
+          step={1}
+          suffix=" %"
+          onChange={(next) => update("offsetX", next)}
+        />
+        <WorldTemplateSlider
+          label="Vertical"
+          value={value.offsetY}
+          min={-80}
+          max={80}
+          step={1}
+          suffix=" %"
+          onChange={(next) => update("offsetY", next)}
+        />
+        <WorldTemplateSlider
+          label="Taille"
+          value={value.scale}
+          min={0.45}
+          max={2.5}
+          step={0.05}
+          suffix="×"
+          onChange={(next) => update("scale", next)}
+        />
+        <WorldTemplateSlider
+          label="Rotation"
+          value={value.rotation}
+          min={-25}
+          max={25}
+          step={1}
+          suffix="°"
+          onChange={(next) => update("rotation", next)}
+        />
+
+        <div className="mt-1 border-t border-white/10 pt-3">
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-zinc-500">
+            Étiquette pseudo / niveau
+          </p>
+          <div className="grid gap-3">
+            <WorldTemplateSlider
+              label="Étiquette X"
+              value={value.labelOffsetX}
+              min={-80}
+              max={80}
+              step={1}
+              suffix=" %"
+              onChange={(next) => update("labelOffsetX", next)}
+            />
+            <WorldTemplateSlider
+              label="Étiquette Y"
+              value={value.labelOffsetY}
+              min={-80}
+              max={80}
+              step={1}
+              suffix=" %"
+              onChange={(next) => update("labelOffsetY", next)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mt-3 rounded-xl border border-red-500/25 bg-red-950/60 px-3 py-2 text-[10px] font-bold text-red-100">
+          ⚠️ {error}
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onReset}
+          disabled={loading || saving}
+          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-black text-white hover:bg-white/10 disabled:opacity-40"
+        >
+          Réinitialiser
+        </button>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={loading || saving}
+          className="flex-1 rounded-xl border border-amber-300/30 bg-amber-400/15 px-3 py-2 text-xs font-black text-amber-100 hover:bg-amber-400/25 disabled:opacity-40"
+        >
+          {saving ? "Enregistrement…" : "✓ Enregistrer pour toutes les villes"}
+        </button>
+      </div>
+    </section>
+  )
+}
+
+type WorldTemplateSliderProps = {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  suffix: string
+  onChange: (value: number) => void
+}
+
+function WorldTemplateSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  suffix,
+  onChange,
+}: WorldTemplateSliderProps) {
+  return (
+    <label className="block">
+      <span className="mb-1 flex items-center justify-between gap-3 text-[10px] font-black uppercase tracking-[0.1em] text-zinc-400">
+        <span>{label}</span>
+        <span className="rounded-md bg-white/5 px-2 py-1 font-mono text-amber-100">
+          {step < 1 ? value.toFixed(2) : Math.round(value)}{suffix}
+        </span>
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="w-full accent-amber-400"
+      />
+    </label>
+  )
+}
+
 type WorldNodeMarkerProps = {
   node: WorldNode
   selected: boolean
+  cityRenderTemplate: WorldCityRenderTemplate
   onSelect: () => void
 }
 
 function WorldNodeMarker({
   node,
   selected,
+  cityRenderTemplate,
   onSelect,
 }: WorldNodeMarkerProps) {
   const isLivePlayerCity =
@@ -2675,32 +3072,45 @@ function WorldNodeMarker({
         title={node.name}
       >
         <span
-          className={`world-player-city-halo pointer-events-none absolute left-1/2 top-[54%] h-[72%] w-[84%] -translate-x-1/2 -translate-y-1/2 rounded-full ${
-            selected
-              ? "is-selected"
-              : ""
-          } ${
-            isCurrent
-              ? "is-current"
-              : "is-rival"
-          }`}
-        />
-
-        <span className="pointer-events-none absolute inset-x-0 bottom-[18%] top-[8%] flex items-end justify-center">
-          <img
-            src={node.mapAssetSrc ?? "/buildings/villa.png"}
-            alt=""
-            className="world-player-city-asset max-h-full max-w-full object-contain"
-            draggable={false}
+          className="world-player-city-render-layer pointer-events-none absolute h-full w-full"
+          style={{
+            left: `${50 + cityRenderTemplate.offsetX}%`,
+            top: `${50 + cityRenderTemplate.offsetY}%`,
+            transform: `translate(-50%, -50%) scale(${cityRenderTemplate.scale}) rotate(${cityRenderTemplate.rotation}deg)`,
+          }}
+        >
+          <span
+            className={`world-player-city-halo absolute left-1/2 top-[54%] h-[72%] w-[84%] -translate-x-1/2 -translate-y-1/2 rounded-full ${
+              selected
+                ? "is-selected"
+                : ""
+            } ${
+              isCurrent
+                ? "is-current"
+                : "is-rival"
+            }`}
           />
+
+          <span className="absolute inset-x-0 bottom-[18%] top-[8%] flex items-end justify-center">
+            <img
+              src={node.mapAssetSrc ?? "/buildings/villa.png"}
+              alt=""
+              className="world-player-city-asset max-h-full max-w-full object-contain"
+              draggable={false}
+            />
+          </span>
         </span>
 
         <span
-          className={`world-player-city-label pointer-events-none absolute left-1/2 top-[82%] min-w-max -translate-x-1/2 rounded-full border px-3 py-1 text-[15px] font-black tracking-[0.04em] shadow-lg backdrop-blur ${
+          className={`world-player-city-label pointer-events-none absolute min-w-max -translate-x-1/2 rounded-full border px-3 py-1 text-[15px] font-black tracking-[0.04em] shadow-lg backdrop-blur ${
             isCurrent
               ? "border-blue-300/40 bg-blue-950/90 text-blue-100"
               : "border-red-300/30 bg-zinc-950/90 text-red-100"
           }`}
+          style={{
+            left: `${50 + cityRenderTemplate.offsetX + cityRenderTemplate.labelOffsetX}%`,
+            top: `${82 + cityRenderTemplate.offsetY + cityRenderTemplate.labelOffsetY}%`,
+          }}
         >
           {isCurrent ? "VOUS" : node.username ?? node.name}
           <span className="ml-1 opacity-60">Niv. {node.level}</span>

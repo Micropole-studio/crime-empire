@@ -1240,6 +1240,9 @@ export default function App() {
           commanderSkills={
             data.commanderSkills
           }
+          isAdmin={
+            Boolean(data.player.is_admin)
+          }
           onNotify={
             recordPersistentNotification
           }
