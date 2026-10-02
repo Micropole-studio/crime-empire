@@ -2105,7 +2105,7 @@ export default function WorldMap({
             occupiedSlotKeys={occupiedSlotKeys}
           />
 
-          <WorldCentralSectorVisual
+          <WorldPoiPadsLayer
             nodes={staticNodes}
           />
 
@@ -2582,79 +2582,60 @@ function getPoiVariantClass(nodeKey: string) {
   }
 }
 
-type WorldCentralSectorVisualProps = {
+type WorldPoiPadsLayerProps = {
   nodes: WorldNode[]
 }
 
-function WorldCentralSectorVisual({
+function getPoiVariantClass(nodeKey: string) {
+  switch (nodeKey) {
+    case "black_market":
+      return "is-black-market"
+    case "illegal_construction_site":
+      return "is-construction"
+    case "weapons_depot":
+      return "is-weapons"
+    case "district_network":
+      return "is-district"
+    case "port_sombre":
+      return "is-port"
+    default:
+      return ""
+  }
+}
+
+function WorldPoiPadsLayer({
   nodes,
-}: WorldCentralSectorVisualProps) {
+}: WorldPoiPadsLayerProps) {
   const poiNodes = nodes.filter((node) => node.type !== "player_city")
 
   return (
-    <div
-      className="world-central-region pointer-events-none absolute overflow-hidden rounded-[3%] border border-white/10 shadow-[0_40px_110px_rgba(0,0,0,0.8)]"
-      style={{
-        left: `${CENTRAL_REGION_BOUNDS.left}%`,
-        top: `${CENTRAL_REGION_BOUNDS.top}%`,
-        width: `${CENTRAL_REGION_BOUNDS.width}%`,
-        height: `${CENTRAL_REGION_BOUNDS.height}%`,
-      }}
-    >
-      <div className="world-central-sector-surface absolute inset-0" />
-      <span className="world-central-sector-road world-central-sector-road-x" />
-      <span className="world-central-sector-road world-central-sector-road-y" />
-      <span className="world-central-sector-road world-central-sector-road-port" />
-      <span className="world-central-sector-water world-central-sector-water-a" />
-      <span className="world-central-sector-water world-central-sector-water-b" />
-
-      <div className="world-central-region-label absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-6 py-2 text-[22px] font-black uppercase tracking-[0.18em] text-white/80 backdrop-blur">
-        Secteur central • Port Sombre
-      </div>
-
-      <div className="world-central-citadel absolute left-1/2 top-1/2 flex h-[18%] w-[24%] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-[18%] border border-amber-300/30 bg-zinc-950/88 text-center text-amber-100 shadow-xl backdrop-blur">
-        <span className="text-[18px] font-black uppercase tracking-[0.1em]">Citadelle centrale</span>
-        <span className="mt-1 text-[11px] uppercase tracking-[0.28em] text-white/55">Quartier sous haute surveillance</span>
-      </div>
-
-      {poiNodes.map((node) => {
-        const localLeft =
-          ((node.x - CENTRAL_REGION_BOUNDS.left) / CENTRAL_REGION_BOUNDS.width) * 100
-        const localTop =
-          ((node.y - CENTRAL_REGION_BOUNDS.top) / CENTRAL_REGION_BOUNDS.height) * 100
-        const localWidth = Math.max(
-          16,
-          ((node.hotspotWidth ?? 18) / CENTRAL_REGION_BOUNDS.width) * 100
-        )
-        const localHeight = Math.max(
-          13,
-          ((node.hotspotHeight ?? 14) / CENTRAL_REGION_BOUNDS.height) * 100
-        )
-
-        return (
-          <div
-            key={`sector-visual-${node.id}`}
-            className={`world-central-poi absolute ${getPoiVariantClass(node.key)}`}
-            style={{
-              left: `${localLeft}%`,
-              top: `${localTop}%`,
-              width: `${localWidth}%`,
-              height: `${localHeight}%`,
-              transform: `translate(-50%, -50%) rotate(${node.hotspotRotation ?? 0}deg)`,
-            }}
-          >
-            <div className="world-central-poi-core absolute inset-0 rounded-[20%]" />
-            <div className="world-central-poi-label absolute left-1/2 top-1/2 min-w-max -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-black/80 px-3 py-1.5 text-[14px] font-black uppercase tracking-[0.08em] text-white shadow-lg backdrop-blur">
-              <span className="mr-1.5">{node.icon}</span>
-              {node.name}
-            </div>
-          </div>
-        )
-      })}
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      {poiNodes.map((node) => (
+        <div
+          key={`poi-pad-${node.id}`}
+          className={`world-poi-pad absolute ${getPoiVariantClass(node.key)}`}
+          style={{
+            left: `${node.x}%`,
+            top: `${node.y}%`,
+            width: `${node.hotspotWidth ?? 16}%`,
+            height: `${node.hotspotHeight ?? 12}%`,
+            transform: `translate(-50%, -50%) rotate(${node.hotspotRotation ?? 0}deg)`,
+          }}
+        >
+          <span className="world-poi-pad-surface absolute inset-0 rounded-[20%]" />
+          <span className="world-poi-pad-road world-poi-pad-road-h absolute" />
+          <span className="world-poi-pad-road world-poi-pad-road-v absolute" />
+          <span className="world-poi-pad-label absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/78 px-3 py-1.5 text-[13px] font-black uppercase tracking-[0.08em] text-white shadow-lg backdrop-blur">
+            <span className="mr-1.5">{node.icon}</span>
+            {node.name}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
 
+function WorldExpanseDecor() {
 function WorldExpanseDecor() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
