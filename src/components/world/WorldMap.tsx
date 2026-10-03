@@ -2712,17 +2712,37 @@ function WorldOperationRoute({
   const currentY = y1 + (y2 - y1) * progress
 
   /*
-   * Le PNG de l'hélicoptère est naturellement orienté vers le bas-gauche
-   * (environ 144° dans le repère écran). On corrige cette orientation de
-   * référence pour que son nez suive réellement le trajet.
+   * Le PNG de l'hélicoptère est une vue 3/4, pas un sprite strictement vu
+   * du dessus. Le faire tourner librement sur 180° le couche visuellement
+   * sur le côté. On conserve donc une assiette crédible : miroir horizontal
+   * pour changer de sens, avec seulement une légère correction d'angle.
    */
   const travelDx = returning ? x1 - x2 : x2 - x1
   const travelDy = returning ? y1 - y2 : y2 - y1
   const headingDegrees =
     Math.atan2(travelDy, travelDx) * (180 / Math.PI)
-  const helicopterAssetHeadingDegrees = 144
-  const helicopterRotationDegrees =
-    headingDegrees - helicopterAssetHeadingDegrees
+
+  const facesRight = travelDx >= 0
+  const stableHeadingDegrees = facesRight ? 36 : 144
+
+  const normalizeAngle = (value: number) => {
+    let normalized = ((value + 180) % 360 + 360) % 360 - 180
+
+    if (normalized === -180) {
+      normalized = 180
+    }
+
+    return normalized
+  }
+
+  const headingDelta = normalizeAngle(
+    headingDegrees - stableHeadingDegrees
+  )
+
+  const helicopterTiltDegrees = Math.max(
+    -10,
+    Math.min(10, headingDelta)
+  )
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[8]">
@@ -2765,7 +2785,7 @@ function WorldOperationRoute({
         <div
           className="world-operation-vehicle-facing"
           style={{
-            transform: `rotate(${helicopterRotationDegrees}deg)`,
+            transform: `rotate(${helicopterTiltDegrees}deg) scaleX(${facesRight ? -1 : 1})`,
           }}
         >
           <img

@@ -339,10 +339,10 @@ code {
 
 @keyframes world-helicopter-float {
   0%, 100% {
-    transform: translateY(-2px) rotate(-0.6deg);
+    transform: translateY(-2px);
   }
   50% {
-    transform: translateY(3px) rotate(0.6deg);
+    transform: translateY(3px);
   }
 }
 
