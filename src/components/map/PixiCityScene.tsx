@@ -20,6 +20,7 @@ type Props = {
   placements: BuildingPlacements
   helicopter: WorldMapAccessPlacement
   villaLevel: number
+  artStyle: "classic" | "luxury"
   onReady: (ready: boolean) => void
   onUnavailable: (unavailable: boolean) => void
 }
@@ -33,6 +34,8 @@ type AnimatedGlow = {
 }
 
 const CITY_GROUND = "/game-assets/city-map.webp"
+const CITY_GROUND_V2 = "/game-assets/city-map-v2.webp"
+const VILLA_V2 = "/game-assets/villa-v2.webp"
 const HELICOPTER = "/game-assets/helicopter.webp"
 const BUILDING_IMAGES = [
   "villa",
@@ -58,6 +61,7 @@ export default function PixiCityScene({
   placements,
   helicopter,
   villaLevel,
+  artStyle,
   onReady,
   onUnavailable,
 }: Props) {
@@ -69,6 +73,7 @@ export default function PixiCityScene({
     placements,
     helicopter,
     villaLevel,
+    artStyle,
   })
   const redrawRef = useRef<() => void>(() => undefined)
 
@@ -81,9 +86,10 @@ export default function PixiCityScene({
       placements,
       helicopter,
       villaLevel,
+      artStyle,
     }
     redrawRef.current()
-  }, [width, height, buildings, placements, helicopter, villaLevel])
+  }, [width, height, buildings, placements, helicopter, villaLevel, artStyle])
 
   useEffect(() => {
     const host = hostRef.current
@@ -94,6 +100,7 @@ export default function PixiCityScene({
     let initialized = false
     let model: Container | null = null
     let background: Sprite | null = null
+    let environmentalLights: Container | null = null
     const glows: AnimatedGlow[] = []
     const textures: Record<string, Texture> = {}
 
@@ -115,6 +122,7 @@ export default function PixiCityScene({
       if (app.renderer.screen.width !== frame.width || app.renderer.screen.height !== frame.height) {
         app.renderer.resize(frame.width, frame.height)
       }
+      background.texture = textures[frame.artStyle === "luxury" ? CITY_GROUND_V2 : CITY_GROUND]
       background.width = frame.width
       background.height = frame.height
 
@@ -124,9 +132,43 @@ export default function PixiCityScene({
       }
       glows.length = 0
 
+      // Environmental lanterns in a dedicated, non-interactive GPU layer.
+      // Their positions reference the fixed geometry of the unchanged background.
+      if (environmentalLights) {
+        for (const graphic of environmentalLights.removeChildren()) {
+          graphic.destroy({ children: true })
+        }
+        if (frame.artStyle === "luxury") {
+          const lamps = [
+            [0.083, 0.18], [0.205, 0.39], [0.307, 0.625],
+            [0.386, 0.07], [0.485, 0.19], [0.614, 0.33],
+            [0.714, 0.50], [0.876, 0.37], [0.935, 0.585],
+            [0.565, 0.83], [0.275, 0.78], [0.106, 0.74],
+          ]
+          for (let i = 0; i < lamps.length; i++) {
+            const [x, y] = lamps[i]
+            const light = new Graphics()
+            light.position.set(x * frame.width, y * frame.height)
+            const r = frame.width * 0.012
+            light.circle(0, 0, r * 2.3)
+            light.fill({ color: 0xeca652, alpha: 0.045 })
+            light.circle(0, 0, r * 1.3)
+            light.fill({ color: 0xffcc75, alpha: 0.08 })
+            light.circle(0, 0, r * 0.45)
+            light.fill({ color: 0xffd996, alpha: 0.14 })
+            environmentalLights.addChild(light)
+            glows.push({ graphic: light, minimum: 0.35, maximum: 0.75, phase: i * 0.7 })
+          }
+        }
+      }
+
       for (const building of frame.buildings) {
         const placement = frame.placements[building.type]
-        const texture = textures[`/game-assets/${building.type}.webp`]
+        const texture = textures[
+          frame.artStyle === "luxury" && building.type === "villa"
+            ? VILLA_V2
+            : `/game-assets/${building.type}.webp`
+        ]
         if (!placement || !texture) continue
 
         const widthPx = (placement.width / 100) * frame.width
@@ -145,6 +187,18 @@ export default function PixiCityScene({
         )
         object.rotation = placement.rotation * DEG_TO_RAD
         object.zIndex = placement.zIndex
+
+        if (frame.artStyle === "luxury" && level >= 1) {
+          // Stone apron and champagne-coloured edge, following the persisted placement.
+          const apron = new Graphics()
+          const rimWidth = widthPx * (building.type === "villa" ? 0.43 : 0.39)
+          const rimHeight = widthPx * 0.085
+          apron.ellipse(0, -imageHeight * 0.03, rimWidth, rimHeight)
+          apron.fill({ color: 0x101b25, alpha: 0.33 })
+          apron.ellipse(0, -imageHeight * 0.03, rimWidth, rimHeight)
+          apron.stroke({ color: 0xdcc28d, alpha: building.type === "villa" ? 0.38 : 0.16, width: Math.max(1, frame.width * 0.0008) })
+          object.addChild(apron)
+        }
 
         const floorShadow = new Graphics()
         floorShadow.ellipse(0, -Math.max(2, imageHeight * 0.045), widthPx * 0.38, Math.max(4, widthPx * 0.052))
@@ -170,6 +224,20 @@ export default function PixiCityScene({
         sprite.alpha = locked ? 0.16 : available ? 0.4 : 1
         if (building.is_upgrading) sprite.tint = 0xddc6a3
         object.addChild(sprite)
+
+        if (frame.artStyle === "luxury" && building.type === "villa" && level >= 1) {
+          // Subtle warm entrance lights, not expensive filters or per-frame React state.
+          for (const side of [-1, 1]) {
+            const lantern = new Graphics()
+            lantern.position.set(side * widthPx * 0.29, -imageHeight * 0.12)
+            lantern.circle(0, 0, Math.max(2, widthPx * 0.015))
+            lantern.fill({ color: 0xffcf7c, alpha: 0.73 })
+            lantern.circle(0, 0, Math.max(5, widthPx * 0.04))
+            lantern.fill({ color: 0xffb759, alpha: 0.08 })
+            object.addChild(lantern)
+            glows.push({ graphic: lantern, minimum: 0.58, maximum: 0.98, phase: side })
+          }
+        }
 
         model.addChild(object)
       }
@@ -230,6 +298,8 @@ export default function PixiCityScene({
 
         const urls = [
           CITY_GROUND,
+          CITY_GROUND_V2,
+          VILLA_V2,
           HELICOPTER,
           ...BUILDING_IMAGES.map((type) => `/game-assets/${type}.webp`),
         ]
@@ -246,6 +316,8 @@ export default function PixiCityScene({
         host.appendChild(instance.canvas)
         background = new Sprite(textures[CITY_GROUND])
         instance.stage.addChild(background)
+        environmentalLights = new Container()
+        instance.stage.addChild(environmentalLights)
         model = new Container()
         model.sortableChildren = true
         instance.stage.addChild(model)

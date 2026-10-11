@@ -203,6 +203,21 @@ export default function GameMap({
       return true
     }
   })
+  // Purely visual, reversible V2.1. Never touches Supabase or player progression.
+  const [artStyle, setArtStyle] = useState<"classic" | "luxury">(() => {
+    try {
+      return window.localStorage.getItem("crime-empire-city-art") === "classic"
+        ? "classic" : "luxury"
+    } catch {
+      return "luxury"
+    }
+  })
+  function toggleArtStyle() {
+    const next = artStyle === "luxury" ? "classic" : "luxury"
+    setArtStyle(next)
+    try { window.localStorage.setItem("crime-empire-city-art", next) } catch { /* private mode */ }
+  }
+
   const [pixiReady, setPixiReady] = useState(false)
   const [pixiUnavailable, setPixiUnavailable] = useState(false)
   const usePixiVisuals = pixiEnabled && pixiReady
@@ -1219,12 +1234,15 @@ export default function GameMap({
             placements={placements}
             helicopter={helicopterPlacement}
             villaLevel={villaLevel}
+            artStyle={artStyle}
             onReady={setPixiReady}
             onUnavailable={setPixiUnavailable}
           />
         )}
         <img
-          src="/game-assets/city-map.webp"
+          src={artStyle === "luxury"
+            ? "/game-assets/city-map-v2.webp"
+            : "/game-assets/city-map.webp"}
           alt="Carte de la ville"
           className="pointer-events-none absolute inset-0 h-full w-full select-none"
           style={{ opacity: usePixiVisuals ? 0 : 1 }}
@@ -1419,7 +1437,9 @@ export default function GameMap({
                 <div className="pointer-events-none absolute bottom-[-2%] left-1/2 h-[12%] w-[70%] -translate-x-1/2 rounded-full bg-black/50 blur-md" />
 
                 <img
-                  src={`/game-assets/${building.type}.webp`}
+                  src={artStyle === "luxury" && building.type === "villa"
+                    ? "/game-assets/villa-v2.webp"
+                    : `/game-assets/${building.type}.webp`}
                   alt={
                     buildingName
                   }
@@ -1531,6 +1551,24 @@ export default function GameMap({
       </div>
 
       <div className="absolute bottom-20 left-3 z-20 flex flex-col items-start gap-2 md:bottom-4">
+        <button
+          type="button"
+          data-map-ui
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation()
+            toggleArtStyle()
+          }}
+          title="Changer les visuels de la ville sans toucher aux sauvegardes"
+          aria-pressed={artStyle === "luxury"}
+          className={`rounded-full border px-3 py-1.5 text-[10px] font-black tracking-wide shadow-lg backdrop-blur transition-colors ${
+            artStyle === "luxury"
+              ? "border-amber-300 bg-gradient-to-r from-amber-950/95 to-zinc-950/95 text-amber-100 hover:border-amber-100"
+              : "border-white/30 bg-zinc-950/85 text-white/80 hover:bg-zinc-800"
+          }`}
+        >
+          {artStyle === "luxury" ? "✦ Ville V2.1 · Luxe" : "↺ Ville V1 · Originale"}
+        </button>
         <button
           type="button"
           data-map-ui
