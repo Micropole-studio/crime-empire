@@ -11,6 +11,8 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react"
 
+import PixiCityScene from "./PixiCityScene"
+
 import type {
   Building,
   BuildingType,
@@ -191,6 +193,32 @@ export default function GameMap({
     isMoving,
     setIsMoving,
   ] = useState(false)
+
+  // Comparaison sécurisée de l'ancien renderer DOM et du nouveau renderer GPU.
+  // Les interactions et les données du jeu restent exactement les mêmes.
+  const [pixiEnabled, setPixiEnabled] = useState(() => {
+    try {
+      return window.localStorage.getItem("crime-empire-city-renderer") !== "legacy"
+    } catch {
+      return true
+    }
+  })
+  const [pixiReady, setPixiReady] = useState(false)
+  const [pixiUnavailable, setPixiUnavailable] = useState(false)
+  const usePixiVisuals = pixiEnabled && pixiReady
+
+  function toggleRenderer() {
+    const next = !pixiEnabled
+    setPixiReady(false)
+    setPixiUnavailable(false)
+    setPixiEnabled(next)
+    try {
+      window.localStorage.setItem(
+        "crime-empire-city-renderer",
+        next ? "pixi" : "legacy",
+      )
+    } catch { /* mode navigation privée */ }
+  }
 
   const uniqueBuildings =
     useMemo(() => {
@@ -1183,10 +1211,23 @@ export default function GameMap({
             "0 0",
         }}
       >
+        {pixiEnabled && (
+          <PixiCityScene
+            width={worldSize.width}
+            height={worldSize.height}
+            buildings={uniqueBuildings}
+            placements={placements}
+            helicopter={helicopterPlacement}
+            villaLevel={villaLevel}
+            onReady={setPixiReady}
+            onUnavailable={setPixiUnavailable}
+          />
+        )}
         <img
-          src="/city-map.png"
+          src="/game-assets/city-map.webp"
           alt="Carte de la ville"
           className="pointer-events-none absolute inset-0 h-full w-full select-none"
+          style={{ opacity: usePixiVisuals ? 0 : 1 }}
           draggable={false}
           onLoad={(
             event:
@@ -1261,8 +1302,9 @@ export default function GameMap({
           <div className="pointer-events-none absolute left-1/2 top-1/2 h-[62%] w-[62%] -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full border border-amber-300/35 shadow-[0_0_24px_rgba(251,191,36,0.35)]" />
 
           <img
-            src="/world/helicopter.png"
+            src="/game-assets/helicopter.webp"
             alt=""
+            style={{ opacity: usePixiVisuals ? 0 : 1 }}
             className="pointer-events-none relative z-10 block w-full select-none drop-shadow-[0_12px_10px_rgba(0,0,0,0.7)] transition duration-300 group-hover:scale-105 group-hover:brightness-110"
             draggable={false}
           />
@@ -1377,10 +1419,11 @@ export default function GameMap({
                 <div className="pointer-events-none absolute bottom-[-2%] left-1/2 h-[12%] w-[70%] -translate-x-1/2 rounded-full bg-black/50 blur-md" />
 
                 <img
-                  src={`/buildings/${building.type}.png`}
+                  src={`/game-assets/${building.type}.webp`}
                   alt={
                     buildingName
                   }
+                  style={{ opacity: usePixiVisuals ? 0 : undefined }}
                   className={`pointer-events-none relative z-10 block w-full select-none transition duration-200 ${
                     isConstructed
                       ? "group-hover:brightness-110"
@@ -1487,8 +1530,29 @@ export default function GameMap({
         )}
       </div>
 
-      <div className="pointer-events-none absolute bottom-20 left-3 z-20 rounded-full border border-white/10 bg-black/65 px-3 py-1.5 text-[10px] font-bold text-white/80 backdrop-blur md:bottom-4">
-        Glisser pour déplacer • pincer pour zoomer
+      <div className="absolute bottom-20 left-3 z-20 flex flex-col items-start gap-2 md:bottom-4">
+        <button
+          type="button"
+          data-map-ui
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation()
+            toggleRenderer()
+          }}
+          title="Comparer les graphismes PixiJS et l'ancien affichage"
+          className="rounded-full border border-amber-300/40 bg-zinc-950/85 px-3 py-1.5 text-[10px] font-bold text-amber-100 shadow-lg backdrop-blur hover:bg-zinc-800"
+        >
+          {pixiEnabled
+            ? pixiReady
+              ? "✦ Rendu PixiJS"
+              : pixiUnavailable
+                ? "▣ Rendu classique (secours)"
+                : "◌ PixiJS en chargement"
+            : "▣ Rendu classique"}
+        </button>
+        <div className="pointer-events-none rounded-full border border-white/10 bg-black/65 px-3 py-1.5 text-[10px] font-bold text-white/80 backdrop-blur">
+          Glisser pour déplacer • pincer pour zoomer
+        </div>
       </div>
 
       <div className="absolute bottom-20 right-3 z-30 flex flex-col gap-2 md:bottom-4">
