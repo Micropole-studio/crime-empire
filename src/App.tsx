@@ -50,6 +50,7 @@ import {
 
 import BuildingUpgradeModal from "./components/BuildingUpgradeModal"
 import GameHud from "./components/game/GameHud"
+import PremiumGameDock from "./components/game/PremiumGameDock"
 import GameMap from "./components/map/GameMap"
 import MapEditor from "./components/map/MapEditor"
 import LaboratoryResearchModal from "./components/LaboratoryResearchModal"
@@ -1077,11 +1078,7 @@ export default function App() {
       {mode === "city" && (
         <>
           <div
-            className="absolute inset-x-0 bottom-0"
-            style={{
-              top:
-                "calc(52px + env(safe-area-inset-top))",
-            }}
+            className="absolute inset-x-0 bottom-0 top-[calc(62px+env(safe-area-inset-top))] sm:top-[calc(72px+env(safe-area-inset-top))]"
           >
             <GameMap
               cityId={
@@ -1173,40 +1170,25 @@ export default function App() {
                 onLogoutClick={
                   handleLogout
                 }
+                isAdmin={Boolean(data.player.is_admin)}
+                onEditorClick={openEditor}
               />
             </div>
           </div>
 
-          {Boolean(
-            data.player.is_admin
-          ) && (
-            <button
-              type="button"
-              onClick={
-                openEditor
-              }
-              className="absolute bottom-4 left-4 z-[900] hidden rounded-xl border border-blue-500/30 bg-zinc-950/85 px-4 py-2 text-sm font-black text-blue-200 shadow-xl backdrop-blur transition hover:bg-blue-950 lg:block"
-            >
-              🛠️ Éditeur de ville
-            </button>
-          )}
-
-          <MobileBottomNavigation
-            onCity={
-              openCity
-            }
-            onInventory={
-              openInventory
-            }
-            onTroops={
-              openTroops
-            }
-            onMissions={
-              openMissions
-            }
-            onLogout={
-              handleLogout
-            }
+          <PremiumGameDock
+            onCity={openCity}
+            onWorld={openWorldMap}
+            onInventory={openInventory}
+            onTroops={openTroops}
+            onMissions={openMissions}
+            onCommander={openCommander}
+            onResearch={() => {
+              closeAllPanels()
+              setIsResearchModalOpen(true)
+            }}
+            isAdmin={Boolean(data.player.is_admin)}
+            onEditor={openEditor}
           />
         </>
       )}
@@ -1304,102 +1286,5 @@ export default function App() {
         </div>
       )}
     </div>
-  )
-}
-
-type MobileBottomNavigationProps = {
-  onCity: () => void
-  onInventory: () => void
-  onTroops: () => void
-  onMissions: () => void
-  onLogout: () => void
-}
-
-function MobileBottomNavigation({
-  onCity,
-  onInventory,
-  onTroops,
-  onMissions,
-  onLogout,
-}: MobileBottomNavigationProps) {
-  return (
-    <nav className="absolute inset-x-2 bottom-2 z-[950] grid grid-cols-5 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 p-1.5 shadow-2xl backdrop-blur-xl lg:hidden">
-      <MobileNavButton
-        icon="🏙️"
-        label="Ville"
-        onClick={
-          onCity
-        }
-        active
-      />
-
-      <MobileNavButton
-        icon="📦"
-        label="Coffre"
-        onClick={
-          onInventory
-        }
-      />
-
-      <MobileNavButton
-        icon="🕴️"
-        label="Troupes"
-        onClick={
-          onTroops
-        }
-      />
-
-      <MobileNavButton
-        icon="📋"
-        label="Missions"
-        onClick={
-          onMissions
-        }
-      />
-
-      <MobileNavButton
-        icon="⏻"
-        label="Quitter"
-        onClick={
-          onLogout
-        }
-      />
-    </nav>
-  )
-}
-
-type MobileNavButtonProps = {
-  icon: string
-  label: string
-  onClick: () => void
-  active?: boolean
-}
-
-function MobileNavButton({
-  icon,
-  label,
-  onClick,
-  active = false,
-}: MobileNavButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={
-        onClick
-      }
-      className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 transition ${
-        active
-          ? "bg-red-700/80 text-white"
-          : "text-zinc-400 hover:bg-white/5 hover:text-white"
-      }`}
-    >
-      <span className="text-base">
-        {icon}
-      </span>
-
-      <span className="truncate text-[8px] font-black uppercase tracking-wide">
-        {label}
-      </span>
-    </button>
   )
 }

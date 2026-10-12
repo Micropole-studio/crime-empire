@@ -890,7 +890,7 @@ export default function MapEditor({
         }
       >
         <img
-          src="/city-map.png"
+          src="/game-assets/city-map-luxe.webp"
           alt="Carte de la ville"
           className="block w-full select-none"
           draggable={false}
@@ -939,7 +939,7 @@ export default function MapEditor({
                   }`}
                 >
                   <img
-                    src={`/buildings/${type}.png`}
+                    src={`/game-assets/${type}-luxe.webp`}
                     alt={
                       BUILDING_NAMES[
                         type
