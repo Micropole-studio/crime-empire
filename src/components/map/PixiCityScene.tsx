@@ -34,8 +34,7 @@ type AnimatedGlow = {
 }
 
 const CITY_GROUND = "/game-assets/city-map.webp"
-const CITY_GROUND_V2 = "/game-assets/city-map-v2.webp"
-const VILLA_V2 = "/game-assets/villa-v2.webp"
+const CITY_GROUND_LUXURY = "/game-assets/city-map-luxe.webp"
 const HELICOPTER = "/game-assets/helicopter.webp"
 const BUILDING_IMAGES = [
   "villa",
@@ -46,6 +45,15 @@ const BUILDING_IMAGES = [
   "syndicate",
   "factory",
 ] as const
+const LUXURY_BUILDING_ASSETS: Record<(typeof BUILDING_IMAGES)[number], string> = {
+  villa: "/game-assets/villa-luxe.webp",
+  workshop: "/game-assets/workshop-luxe.webp",
+  hideout: "/game-assets/hideout-luxe.webp",
+  wall: "/game-assets/wall-luxe.webp",
+  laboratory: "/game-assets/laboratory-luxe.webp",
+  syndicate: "/game-assets/syndicate-luxe.webp",
+  factory: "/game-assets/factory-luxe.webp",
+}
 const DEG_TO_RAD = Math.PI / 180
 
 /**
@@ -122,7 +130,7 @@ export default function PixiCityScene({
       if (app.renderer.screen.width !== frame.width || app.renderer.screen.height !== frame.height) {
         app.renderer.resize(frame.width, frame.height)
       }
-      background.texture = textures[frame.artStyle === "luxury" ? CITY_GROUND_V2 : CITY_GROUND]
+      background.texture = textures[frame.artStyle === "luxury" ? CITY_GROUND_LUXURY : CITY_GROUND]
       background.width = frame.width
       background.height = frame.height
 
@@ -165,8 +173,8 @@ export default function PixiCityScene({
       for (const building of frame.buildings) {
         const placement = frame.placements[building.type]
         const texture = textures[
-          frame.artStyle === "luxury" && building.type === "villa"
-            ? VILLA_V2
+          frame.artStyle === "luxury"
+            ? LUXURY_BUILDING_ASSETS[building.type]
             : `/game-assets/${building.type}.webp`
         ]
         if (!placement || !texture) continue
@@ -298,10 +306,10 @@ export default function PixiCityScene({
 
         const urls = [
           CITY_GROUND,
-          CITY_GROUND_V2,
-          VILLA_V2,
+          CITY_GROUND_LUXURY,
           HELICOPTER,
           ...BUILDING_IMAGES.map((type) => `/game-assets/${type}.webp`),
+          ...BUILDING_IMAGES.map((type) => LUXURY_BUILDING_ASSETS[type]),
         ]
         // Si une image manque, le DOM classique reste affiché :
         // pas d'écran noir et pas de sauvegarde touchée.

@@ -102,6 +102,17 @@ const DEFAULT_WORLD_SIZE: WorldSize = {
   height: 900,
 }
 
+const LUXURY_CITY_BACKGROUND = "/game-assets/city-map-luxe.webp"
+const LUXURY_BUILDING_ASSETS: Record<BuildingType, string> = {
+  villa: "/game-assets/villa-luxe.webp",
+  workshop: "/game-assets/workshop-luxe.webp",
+  hideout: "/game-assets/hideout-luxe.webp",
+  wall: "/game-assets/wall-luxe.webp",
+  laboratory: "/game-assets/laboratory-luxe.webp",
+  syndicate: "/game-assets/syndicate-luxe.webp",
+  factory: "/game-assets/factory-luxe.webp",
+}
+
 export default function GameMap({
   cityId,
   buildings,
@@ -203,7 +214,7 @@ export default function GameMap({
       return true
     }
   })
-  // Purely visual, reversible V2.1. Never touches Supabase or player progression.
+  // Bloc 1 graphique premium : entièrement visuel et réversible. Aucun impact sur Supabase ni la progression.
   const [artStyle, setArtStyle] = useState<"classic" | "luxury">(() => {
     try {
       return window.localStorage.getItem("crime-empire-city-art") === "classic"
@@ -1241,7 +1252,7 @@ export default function GameMap({
         )}
         <img
           src={artStyle === "luxury"
-            ? "/game-assets/city-map-v2.webp"
+            ? LUXURY_CITY_BACKGROUND
             : "/game-assets/city-map.webp"}
           alt="Carte de la ville"
           className="pointer-events-none absolute inset-0 h-full w-full select-none"
@@ -1437,8 +1448,8 @@ export default function GameMap({
                 <div className="pointer-events-none absolute bottom-[-2%] left-1/2 h-[12%] w-[70%] -translate-x-1/2 rounded-full bg-black/50 blur-md" />
 
                 <img
-                  src={artStyle === "luxury" && building.type === "villa"
-                    ? "/game-assets/villa-v2.webp"
+                  src={artStyle === "luxury"
+                    ? LUXURY_BUILDING_ASSETS[building.type]
                     : `/game-assets/${building.type}.webp`}
                   alt={
                     buildingName
@@ -1567,7 +1578,7 @@ export default function GameMap({
               : "border-white/30 bg-zinc-950/85 text-white/80 hover:bg-zinc-800"
           }`}
         >
-          {artStyle === "luxury" ? "✦ Ville V2.1 · Luxe" : "↺ Ville V1 · Originale"}
+          {artStyle === "luxury" ? "✦ Ville Premium · Bloc 1" : "↺ Ville Classique"}
         </button>
         <button
           type="button"
