@@ -11,6 +11,7 @@ import {
 } from "react"
 
 import PixiCityScene from "./PixiCityScene"
+import SeaCanvasOverlay from "./SeaCanvasOverlay"
 
 import type {
   Building,
@@ -210,6 +211,7 @@ export default function GameMap({
   const [pixiReady, setPixiReady] = useState(false)
   const [pixiUnavailable, setPixiUnavailable] = useState(false)
   const usePixiVisuals = pixiEnabled && pixiReady
+  const [seaStatus, setSeaStatus] = useState<"loading" | "active" | "partial" | "fallback" | "paused" | "unavailable">("loading")
 
   function toggleRenderer() {
     const next = !pixiEnabled
@@ -1200,6 +1202,9 @@ export default function GameMap({
           }}
         />
 
+        {/* L'animation de la mer suit la caméra CSS, avec ou sans PixiJS. */}
+        {artStyle === "luxury" && <SeaCanvasOverlay onStatus={setSeaStatus} />}
+
         {/* Accès au Monde via le HUD. L’hélicoptère reste réservé à la world map. */}
 
         {uniqueBuildings.map(
@@ -1458,6 +1463,26 @@ export default function GameMap({
                 : "◌ PixiJS en chargement"
             : "▣ Rendu classique"}
         </button>
+        {artStyle === "luxury" && (
+          <div
+            aria-live="polite"
+            className={`pointer-events-none rounded-full border px-3 py-1 text-[10px] font-bold backdrop-blur ${
+              seaStatus === "active" ? "border-cyan-400/35 bg-cyan-950/80 text-cyan-100"
+                : seaStatus === "paused" ? "border-amber-400/40 bg-amber-950/75 text-amber-100"
+                  : seaStatus === "partial" || seaStatus === "fallback" || seaStatus === "unavailable"
+                    ? "border-rose-400/40 bg-rose-950/75 text-rose-100"
+                    : "border-white/20 bg-black/70 text-white/80"
+            }`}
+            title="État du calque marin indépendant du rendu PixiJS"
+          >
+            {seaStatus === "active" ? "🌊 Mer animée (2D)"
+              : seaStatus === "partial" ? "🌊 Mer animée · textures incomplètes"
+                : seaStatus === "fallback" ? "🌊 Vagues seules · textures manquantes"
+                  : seaStatus === "paused" ? "🌊 Mouvement réduit (système)"
+                    : seaStatus === "unavailable" ? "🌊 Canvas 2D indisponible"
+                      : "🌊 Chargement de la mer…"}
+          </div>
+        )}
         <div className="pointer-events-none rounded-full border border-white/10 bg-black/65 px-3 py-1.5 text-[10px] font-bold text-white/80 backdrop-blur">
           Glisser pour déplacer • pincer pour zoomer
         </div>

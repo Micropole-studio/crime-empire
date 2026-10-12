@@ -127,7 +127,6 @@ export default function PixiCityScene({
       background.texture = textures[frame.artStyle === "luxury" ? CITY_GROUND_LUXURY : CITY_GROUND]
       background.width = frame.width
       background.height = frame.height
-
       // Supprimer les anciens objets uniquement, pas les textures mises en cache.
       for (const object of model.removeChildren()) {
         object.destroy({ children: true })
