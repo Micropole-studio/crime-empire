@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import {
+  AnimatedSprite,
   Application,
   Assets,
   Container,
@@ -34,6 +35,13 @@ type AnimatedGlow = {
 
 const CITY_GROUND = "/game-assets/city-map.webp"
 const CITY_GROUND_LUXURY = "/game-assets/city-map-luxe.webp"
+// 16 water-only frames extracted from the PREMIUM map: no yacht or buildings.
+const SEA_FRAMES = Array.from(
+  { length: 16 },
+  (_, n) => `/game-assets/sea-premium/${String(n).padStart(2, "0")}.webp`,
+)
+const SEA_CROP = { x: 800, y: 440, width: 736, height: 584 }
+const SEA_SOURCE_SIZE = { width: 1536, height: 1024 }
 const BUILDING_IMAGES = [
   "villa",
   "workshop",
@@ -105,6 +113,8 @@ export default function PixiCityScene({
     let background: Sprite | null = null
     let environmentalLights: Container | null = null
     let seaAmbience: SeaAmbience | null = null
+    let seaTextureAnimation: AnimatedSprite | null = null
+    let lastSeaFrame = -1
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
     const glows: AnimatedGlow[] = []
     const textures: Record<string, Texture> = {}
@@ -112,7 +122,18 @@ export default function PixiCityScene({
     // Un seul ticker : aucun setState React à chaque image.
     const animate = () => {
       const time = performance.now() / 1000
-      if (!reducedMotion) seaAmbience?.tick(time)
+      if (!reducedMotion) {
+        seaAmbience?.tick(time)
+        if (seaTextureAnimation?.visible) {
+          // 8 FPS water texture, 60 FPS moving light reflections.
+          // Index changes only when necessary (cheap on mobile).
+          const index = Math.floor(time * 8) % SEA_FRAMES.length
+          if (lastSeaFrame !== index) {
+            seaTextureAnimation.gotoAndStop(index)
+            lastSeaFrame = index
+          }
+        }
+      }
       for (const glow of glows) {
         const wave = (Math.sin(time * 2.4 + glow.phase) + 1) / 2
         glow.graphic.alpha =
@@ -131,6 +152,15 @@ export default function PixiCityScene({
       background.texture = textures[frame.artStyle === "luxury" ? CITY_GROUND_LUXURY : CITY_GROUND]
       background.width = frame.width
       background.height = frame.height
+      if (seaTextureAnimation) {
+        seaTextureAnimation.visible = frame.artStyle === "luxury" && !reducedMotion
+        seaTextureAnimation.position.set(
+          SEA_CROP.x * frame.width / SEA_SOURCE_SIZE.width,
+          SEA_CROP.y * frame.height / SEA_SOURCE_SIZE.height,
+        )
+        seaTextureAnimation.width = SEA_CROP.width * frame.width / SEA_SOURCE_SIZE.width
+        seaTextureAnimation.height = SEA_CROP.height * frame.height / SEA_SOURCE_SIZE.height
+      }
       if (seaAmbience) {
         seaAmbience.resize(frame.width, frame.height)
         seaAmbience.container.visible = frame.artStyle === "luxury"
@@ -279,6 +309,7 @@ export default function PixiCityScene({
         const urls = [
           CITY_GROUND,
           CITY_GROUND_LUXURY,
+          ...SEA_FRAMES,
           ...BUILDING_IMAGES.map((type) => `/game-assets/${type}.webp`),
           ...BUILDING_IMAGES.map((type) => LUXURY_BUILDING_ASSETS[type]),
         ]
@@ -295,6 +326,11 @@ export default function PixiCityScene({
         host.appendChild(instance.canvas)
         background = new Sprite(textures[CITY_GROUND])
         instance.stage.addChild(background)
+        seaTextureAnimation = new AnimatedSprite(SEA_FRAMES.map((url) => textures[url]))
+        // The instance's ticker drives the animation (no second ticker created).
+        seaTextureAnimation.autoUpdate = false
+        seaTextureAnimation.gotoAndStop(0)
+        instance.stage.addChild(seaTextureAnimation)
         seaAmbience = createSeaAmbience()
         seaAmbience.tick(0) // Reflets à l’intensité correcte même en mode mouvement réduit.
         instance.stage.addChild(seaAmbience.container)
