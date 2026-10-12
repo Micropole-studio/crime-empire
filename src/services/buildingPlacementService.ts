@@ -37,6 +37,7 @@ type RemotePlacements = Partial<
 export type SharedPlacementsResult = {
   placements: BuildingPlacements
   hasRemotePlacements: boolean
+  loadError: string | null
 }
 
 
@@ -140,6 +141,7 @@ export async function loadSharedBuildingPlacements(
         localPlacements,
       hasRemotePlacements:
         false,
+      loadError: null,
     }
   }
 
@@ -155,16 +157,20 @@ export async function loadSharedBuildingPlacements(
   )
 
   if (error) {
-    console.error(
-      "Impossible de charger les positions partagées :",
-      error
-    )
-
+    const details = [error.code, error.message, error.details, error.hint]
+      .filter(Boolean).join(" | ")
+    console.error("Positions Supabase indisponibles", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    })
+    // Ne jamais confondre une erreur réseau/SQL avec une table vide :
+    // l'éditeur NE DOIT PAS publier ses valeurs locales automatiquement.
     return {
-      placements:
-        localPlacements,
-      hasRemotePlacements:
-        false,
+      placements: localPlacements,
+      hasRemotePlacements: false,
+      loadError: details || "Échec de lecture Supabase",
     }
   }
 
@@ -204,6 +210,7 @@ export async function loadSharedBuildingPlacements(
   return {
     placements,
     hasRemotePlacements,
+    loadError: null,
   }
 }
 
@@ -231,10 +238,12 @@ export async function saveSharedBuildingPlacements(
   )
 
   if (error) {
-    console.error(
-      "Impossible de publier les positions :",
-      error
-    )
+    console.error("Impossible de publier les positions :", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    })
 
     throw error
   }

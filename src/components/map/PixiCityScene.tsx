@@ -10,7 +10,6 @@ import {
 
 import type { Building } from "../../types/building"
 import type { BuildingPlacements } from "../../types/buildingPlacement"
-import type { WorldMapAccessPlacement } from "../../data/worldMapAccess"
 import { getRequiredVillaLevel } from "../../data/buildingRequirements"
 
 type Props = {
@@ -18,7 +17,6 @@ type Props = {
   height: number
   buildings: Building[]
   placements: BuildingPlacements
-  helicopter: WorldMapAccessPlacement
   villaLevel: number
   artStyle: "classic" | "luxury"
   onReady: (ready: boolean) => void
@@ -35,7 +33,6 @@ type AnimatedGlow = {
 
 const CITY_GROUND = "/game-assets/city-map.webp"
 const CITY_GROUND_LUXURY = "/game-assets/city-map-luxe.webp"
-const HELICOPTER = "/game-assets/helicopter.webp"
 const BUILDING_IMAGES = [
   "villa",
   "workshop",
@@ -67,7 +64,6 @@ export default function PixiCityScene({
   height,
   buildings,
   placements,
-  helicopter,
   villaLevel,
   artStyle,
   onReady,
@@ -79,7 +75,6 @@ export default function PixiCityScene({
     height,
     buildings,
     placements,
-    helicopter,
     villaLevel,
     artStyle,
   })
@@ -92,12 +87,11 @@ export default function PixiCityScene({
       height,
       buildings,
       placements,
-      helicopter,
       villaLevel,
       artStyle,
     }
     redrawRef.current()
-  }, [width, height, buildings, placements, helicopter, villaLevel, artStyle])
+  }, [width, height, buildings, placements, villaLevel, artStyle])
 
   useEffect(() => {
     const host = hostRef.current
@@ -250,36 +244,6 @@ export default function PixiCityScene({
         model.addChild(object)
       }
 
-      const heliWidth = (frame.helicopter.width / 100) * frame.width
-      const helicopterTexture = textures[HELICOPTER]
-      if (helicopterTexture) {
-        const object = new Container()
-        object.position.set(
-          (frame.helicopter.x / 100) * frame.width,
-          (frame.helicopter.y / 100) * frame.height,
-        )
-        object.rotation = frame.helicopter.rotation * DEG_TO_RAD
-        object.zIndex = frame.helicopter.zIndex
-
-        const shadow = new Graphics()
-        shadow.ellipse(0, heliWidth * 0.13, heliWidth * 0.34, heliWidth * 0.09)
-        shadow.fill({ color: 0x000000, alpha: 0.52 })
-        object.addChild(shadow)
-
-        const aura = new Graphics()
-        aura.circle(0, 0, heliWidth * 0.40)
-        aura.stroke({ color: 0xf5b94c, width: Math.max(2, heliWidth * 0.014), alpha: 0.75 })
-        object.addChild(aura)
-        glows.push({ graphic: aura, minimum: 0.25, maximum: 0.85, phase: 0.7 })
-
-        const sprite = new Sprite(helicopterTexture)
-        sprite.anchor.set(0.5)
-        sprite.width = heliWidth
-        sprite.height = heliWidth * (helicopterTexture.height / helicopterTexture.width)
-        object.addChild(sprite)
-        model.addChild(object)
-      }
-
       model.sortChildren()
     }
 
@@ -307,7 +271,6 @@ export default function PixiCityScene({
         const urls = [
           CITY_GROUND,
           CITY_GROUND_LUXURY,
-          HELICOPTER,
           ...BUILDING_IMAGES.map((type) => `/game-assets/${type}.webp`),
           ...BUILDING_IMAGES.map((type) => LUXURY_BUILDING_ASSETS[type]),
         ]

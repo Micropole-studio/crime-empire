@@ -8,7 +8,6 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type SyntheticEvent,
-  type WheelEvent as ReactWheelEvent,
 } from "react"
 
 import PixiCityScene from "./PixiCityScene"
@@ -40,18 +39,6 @@ import {
   loadSharedBuildingPlacements,
 } from "../../services/buildingPlacementService"
 
-import {
-  loadWorldMapAccessPlacement,
-} from "../../data/worldMapAccess"
-
-import type {
-  WorldMapAccessPlacement,
-} from "../../data/worldMapAccess"
-
-import {
-  WORLD_MAP_ACCESS_UPDATED_EVENT,
-  loadSharedWorldMapAccess,
-} from "../../services/worldMapAccessService"
 
 type Props = {
   cityId: string
@@ -190,15 +177,6 @@ export default function GameMap({
   )
 
 
-  const [
-    helicopterPlacement,
-    setHelicopterPlacement,
-  ] = useState<WorldMapAccessPlacement>(
-    () =>
-      loadWorldMapAccessPlacement(
-        cityId
-      )
-  )
 
   const [
     isMoving,
@@ -691,56 +669,6 @@ export default function GameMap({
     }
   }, [cityId])
 
-  useEffect(() => {
-    let cancelled =
-      false
-
-    async function loadHelicopterPlacement() {
-      const result =
-        await loadSharedWorldMapAccess(
-          cityId
-        )
-
-      if (!cancelled) {
-        setHelicopterPlacement(
-          result.placement
-        )
-      }
-    }
-
-    loadHelicopterPlacement()
-
-    function handleHelicopterUpdated(
-      event: Event
-    ) {
-      const customEvent =
-        event as CustomEvent<
-          WorldMapAccessPlacement
-        >
-
-      if (
-        customEvent.detail
-      ) {
-        setHelicopterPlacement(
-          customEvent.detail
-        )
-      }
-    }
-
-    window.addEventListener(
-      WORLD_MAP_ACCESS_UPDATED_EVENT,
-      handleHelicopterUpdated
-    )
-
-    return () => {
-      cancelled = true
-
-      window.removeEventListener(
-        WORLD_MAP_ACCESS_UPDATED_EVENT,
-        handleHelicopterUpdated
-      )
-    }
-  }, [cityId])
 
   useEffect(() => {
     const viewport = viewportRef.current
@@ -1099,29 +1027,23 @@ export default function GameMap({
     finishPointer(event)
   }
 
-  function handleWheel(
-    event: ReactWheelEvent<HTMLDivElement>
-  ) {
-    event.preventDefault()
-
-    const viewport = viewportRef.current
-
-    if (!viewport) {
-      return
-    }
-
-    stopCameraAnimation()
-    const rect = viewport.getBoundingClientRect()
-    const zoomFactor = Math.exp(-event.deltaY * 0.00135)
-
-    zoomAtPoint(
-      cameraRef.current.scale * zoomFactor,
-      {
+  // Écouteur non-passif pour le zoom molette (évite l'avertissement passive listener).
+  useEffect(() => {
+    const node = viewportRef.current
+    if (!node) return
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      stopCameraAnimation()
+      const rect = node.getBoundingClientRect()
+      const zoomFactor = Math.exp(-event.deltaY * 0.00135)
+      zoomAtPoint(cameraRef.current.scale * zoomFactor, {
         x: event.clientX - rect.left,
         y: event.clientY - rect.top,
-      }
-    )
-  }
+      })
+    }
+    node.addEventListener("wheel", onWheel, { passive: false })
+    return () => node.removeEventListener("wheel", onWheel)
+  }, [stopCameraAnimation, zoomAtPoint])
 
   function handleBuildingClick(
     building: Building
@@ -1175,9 +1097,6 @@ export default function GameMap({
       }
       onPointerCancel={
         cancelPointer
-      }
-      onWheel={
-        handleWheel
       }
       onDoubleClick={(
         event:
@@ -1243,7 +1162,6 @@ export default function GameMap({
             height={worldSize.height}
             buildings={uniqueBuildings}
             placements={placements}
-            helicopter={helicopterPlacement}
             villaLevel={villaLevel}
             artStyle={artStyle}
             onReady={setPixiReady}
@@ -1282,66 +1200,7 @@ export default function GameMap({
           }}
         />
 
-        {/* ACCÈS À LA CARTE DU MONDE */}
-        <button
-          type="button"
-          data-map-object
-          data-map-action="world-map"
-          aria-label="Ouvrir la carte du monde"
-          title="Ouvrir la carte du monde"
-          onClick={(event) => {
-            event.stopPropagation()
-
-            if (
-              suppressClickRef.current ||
-              (event.detail > 0 &&
-                performance.now() <
-                  suppressNativeObjectClickUntilRef.current)
-            ) {
-              return
-            }
-
-            onWorldMapOpen?.()
-          }}
-          className="group absolute cursor-pointer border-0 bg-transparent p-0"
-          style={{
-            left:
-              `${helicopterPlacement.x}%`,
-
-            top:
-              `${helicopterPlacement.y}%`,
-
-            width:
-              `${helicopterPlacement.width}%`,
-
-            zIndex:
-              helicopterPlacement.zIndex,
-
-            transform: `
-              translate(-50%, -50%)
-              rotate(${helicopterPlacement.rotation}deg)
-            `,
-
-            transformOrigin:
-              "center center",
-          }}
-        >
-          <div className="pointer-events-none absolute inset-[12%] rounded-full bg-amber-400/20 blur-xl transition duration-300 group-hover:bg-amber-300/35 group-hover:blur-2xl" />
-
-          <div className="pointer-events-none absolute left-1/2 top-1/2 h-[62%] w-[62%] -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full border border-amber-300/35 shadow-[0_0_24px_rgba(251,191,36,0.35)]" />
-
-          <img
-            src="/game-assets/helicopter.webp"
-            alt=""
-            style={{ opacity: usePixiVisuals ? 0 : 1 }}
-            className="pointer-events-none relative z-10 block w-full select-none drop-shadow-[0_12px_10px_rgba(0,0,0,0.7)] transition duration-300 group-hover:scale-105 group-hover:brightness-110"
-            draggable={false}
-          />
-
-          <div className="pointer-events-none absolute left-1/2 top-full z-20 -mt-1 -translate-x-1/2 whitespace-nowrap rounded-full border border-amber-300/30 bg-black/85 px-3 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-amber-200 opacity-90 shadow-xl backdrop-blur transition group-hover:border-amber-200/60 group-hover:text-amber-100 sm:text-[10px]">
-            🌍 Carte du monde
-          </div>
-        </button>
+        {/* Accès au Monde via le HUD. L’hélicoptère reste réservé à la world map. */}
 
         {uniqueBuildings.map(
           (building) => {

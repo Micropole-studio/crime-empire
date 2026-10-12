@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useRef,
   useState,
   type ChangeEvent,
   type MouseEvent,
@@ -14,10 +13,6 @@ import type {
   BuildingPlacement,
   BuildingPlacements,
 } from "../../types/buildingPlacement"
-
-import type {
-  WorldMapAccessPlacement,
-} from "../../data/worldMapAccess"
 
 import {
   BUILDING_NAMES,
@@ -34,17 +29,6 @@ import {
   saveSharedBuildingPlacements,
 } from "../../services/buildingPlacementService"
 
-import {
-  loadWorldMapAccessPlacement,
-  resetWorldMapAccessPlacement,
-  saveWorldMapAccessPlacement,
-} from "../../data/worldMapAccess"
-
-import {
-  loadSharedWorldMapAccess,
-  saveSharedWorldMapAccess,
-} from "../../services/worldMapAccessService"
-
 type Props = {
   cityId: string
   isAdmin?: boolean
@@ -60,10 +44,6 @@ type SyncStatus =
   | "saving"
   | "saved"
   | "error"
-
-type EditorObjectType =
-  | BuildingType
-  | "helicopter"
 
 type EditablePlacement = {
   x: number
@@ -84,21 +64,10 @@ const BUILDING_TYPES:
     "factory",
   ]
 
-const EDITOR_OBJECTS:
-  EditorObjectType[] = [
-    ...BUILDING_TYPES,
-    "helicopter",
-  ]
+const EDITOR_OBJECTS: BuildingType[] = BUILDING_TYPES
 
-function getObjectName(
-  type: EditorObjectType
-) {
-  return type ===
-    "helicopter"
-    ? "Hélicoptère"
-    : BUILDING_NAMES[
-        type
-      ]
+function getObjectName(type: BuildingType) {
+  return BUILDING_NAMES[type]
 }
 
 export default function MapEditor({
@@ -110,7 +79,7 @@ export default function MapEditor({
     selectedType,
     setSelectedType,
   ] = useState<
-    EditorObjectType
+    BuildingType
   >("villa")
 
   const [
@@ -124,226 +93,44 @@ export default function MapEditor({
   )
 
   const [
-    helicopterPlacement,
-    setHelicopterPlacement,
-  ] = useState<WorldMapAccessPlacement>(
-    () =>
-      loadWorldMapAccessPlacement(
-        cityId
-      )
-  )
-
-  const [
     syncStatus,
     setSyncStatus,
   ] = useState<SyncStatus>(
     "loading"
   )
 
-  const saveTimerRef =
-    useRef<number | null>(
-      null
-    )
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const [readBlocked, setReadBlocked] = useState(false)
 
-  const selectedPlacement:
-    EditablePlacement =
-    selectedType ===
-      "helicopter"
-      ? helicopterPlacement
-      : placements[
-          selectedType
-        ]
+  const selectedPlacement: EditablePlacement = placements[selectedType]
 
   useEffect(() => {
-    let cancelled =
-      false
+    let cancelled = false
+    setSyncStatus("loading")
+    setSyncError(null)
+    setReadBlocked(false)
 
-    async function initialize() {
-      try {
-        setSyncStatus(
-          "loading"
-        )
-
-        const [
-          buildingResult,
-          helicopterResult,
-        ] = await Promise.all([
-          loadSharedBuildingPlacements(
-            cityId
-          ),
-
-          loadSharedWorldMapAccess(
-            cityId
-          ),
-        ])
-
-        if (cancelled) {
-          return
-        }
-
-        setPlacements(
-          buildingResult.placements
-        )
-
-        setHelicopterPlacement(
-          helicopterResult.placement
-        )
-
-        const isDesktop =
-          window.innerWidth >=
-          768
-
-        let nextBuildings =
-          buildingResult.placements
-
-        let nextHelicopter =
-          helicopterResult.placement
-
-        let publishedSomething =
-          false
-
-        if (
-          isDesktop &&
-          !buildingResult.hasRemotePlacements
-        ) {
-          nextBuildings =
-            await saveSharedBuildingPlacements(
-              cityId,
-              nextBuildings
-            )
-
-          publishedSomething =
-            true
-        }
-
-        if (
-          isDesktop &&
-          !helicopterResult.hasRemotePlacement
-        ) {
-          nextHelicopter =
-            await saveSharedWorldMapAccess(
-              cityId,
-              nextHelicopter
-            )
-
-          publishedSomething =
-            true
-        }
-
-        if (cancelled) {
-          return
-        }
-
-        setPlacements(
-          nextBuildings
-        )
-
-        setHelicopterPlacement(
-          nextHelicopter
-        )
-
-        setSyncStatus(
-          publishedSomething ||
-          (
-            buildingResult.hasRemotePlacements &&
-            helicopterResult.hasRemotePlacement
-          )
-            ? "saved"
-            : "local"
-        )
-      } catch (error) {
-        console.error(
-          "Impossible d'initialiser l'éditeur de carte :",
-          error
-        )
-
-        if (!cancelled) {
-          setSyncStatus(
-            "error"
-          )
-        }
+    void loadSharedBuildingPlacements(cityId).then((result) => {
+      if (cancelled) return
+      setPlacements(result.placements)
+      // En cas d'erreur, laisser les positions locales éditables,
+      // MAIS ne jamais les publier automatiquement.
+      if (result.loadError) {
+        setSyncStatus("error")
+        setReadBlocked(true)
+        setSyncError(result.loadError)
+      } else {
+        setSyncStatus(result.hasRemotePlacements ? "saved" : "local")
       }
-    }
+    }).catch((error: unknown) => {
+      if (cancelled) return
+      setSyncStatus("error")
+      setReadBlocked(true)
+      setSyncError(error instanceof Error ? error.message : String(error))
+    })
 
-    initialize()
-
-    return () => {
-      cancelled = true
-
-      if (
-        saveTimerRef.current !==
-        null
-      ) {
-        window.clearTimeout(
-          saveTimerRef.current
-        )
-      }
-    }
+    return () => { cancelled = true }
   }, [cityId])
-
-  function scheduleRemoteSave(
-    updatedPlacements:
-      BuildingPlacements,
-    updatedHelicopter:
-      WorldMapAccessPlacement
-  ) {
-    if (
-      saveTimerRef.current !==
-      null
-    ) {
-      window.clearTimeout(
-        saveTimerRef.current
-      )
-    }
-
-    setSyncStatus(
-      "saving"
-    )
-
-    saveTimerRef.current =
-      window.setTimeout(
-        async () => {
-          try {
-            const [
-              synchronizedBuildings,
-              synchronizedHelicopter,
-            ] = await Promise.all([
-              saveSharedBuildingPlacements(
-                cityId,
-                updatedPlacements
-              ),
-
-              saveSharedWorldMapAccess(
-                cityId,
-                updatedHelicopter
-              ),
-            ])
-
-            setPlacements(
-              synchronizedBuildings
-            )
-
-            setHelicopterPlacement(
-              synchronizedHelicopter
-            )
-
-            setSyncStatus(
-              "saved"
-            )
-          } catch (error) {
-            console.error(
-              "Impossible de synchroniser les positions :",
-              error
-            )
-
-            setSyncStatus(
-              "error"
-            )
-          }
-        },
-        500
-      )
-  }
 
   function updateSelectedPlacement(
     changes:
@@ -351,31 +138,6 @@ export default function MapEditor({
         EditablePlacement
       >
   ) {
-    if (
-      selectedType ===
-      "helicopter"
-    ) {
-      const updatedHelicopter =
-        saveWorldMapAccessPlacement(
-          {
-            ...helicopterPlacement,
-            ...changes,
-          },
-          cityId
-        )
-
-      setHelicopterPlacement(
-        updatedHelicopter
-      )
-
-      scheduleRemoteSave(
-        placements,
-        updatedHelicopter
-      )
-
-      return
-    }
-
     const updatedPlacement:
       BuildingPlacement = {
         ...placements[
@@ -405,10 +167,8 @@ export default function MapEditor({
       cityId
     )
 
-    scheduleRemoteSave(
-      updatedPlacements,
-      helicopterPlacement
-    )
+    setSyncStatus("local")
+    setSyncError(null)
 
     onSave?.(
       updatedPlacement
@@ -465,118 +225,29 @@ export default function MapEditor({
     })
   }
 
-  async function handleReset() {
-    if (
-      isAdmin &&
-      !window.confirm(
-        "Réinitialiser la ville DEV ? Cette disposition deviendra aussi le modèle des nouveaux joueurs après publication."
-      )
-    ) {
-      return
-    }
+  function handleReset() {
+    if (!window.confirm(
+      "Réinitialiser les positions locales ? Il faudra ensuite cliquer sur Publier pour les enregistrer dans Supabase."
+    )) return
 
-    const defaults =
-      resetBuildingPlacements(
-        cityId
-      )
-
-    const helicopterDefaults =
-      resetWorldMapAccessPlacement(
-        cityId
-      )
-
-    setPlacements(
-      defaults
-    )
-
-    setHelicopterPlacement(
-      helicopterDefaults
-    )
-
-    setSyncStatus(
-      "saving"
-    )
-
-    try {
-      const [
-        synchronizedBuildings,
-        synchronizedHelicopter,
-      ] = await Promise.all([
-        saveSharedBuildingPlacements(
-          cityId,
-          defaults
-        ),
-
-        saveSharedWorldMapAccess(
-          cityId,
-          helicopterDefaults
-        ),
-      ])
-
-      setPlacements(
-        synchronizedBuildings
-      )
-
-      setHelicopterPlacement(
-        synchronizedHelicopter
-      )
-
-      setSyncStatus(
-        "saved"
-      )
-    } catch (error) {
-      console.error(
-        "Impossible de publier les positions réinitialisées :",
-        error
-      )
-
-      setSyncStatus(
-        "error"
-      )
-    }
+    const defaults = resetBuildingPlacements(cityId)
+    setPlacements(defaults)
+    setSyncStatus("local")
+    setSyncError(null)
   }
 
   async function handlePublishNow() {
+    if (syncStatus === "saving" || readBlocked) return
     try {
-      setSyncStatus(
-        "saving"
-      )
-
-      const [
-        synchronizedBuildings,
-        synchronizedHelicopter,
-      ] = await Promise.all([
-        saveSharedBuildingPlacements(
-          cityId,
-          placements
-        ),
-
-        saveSharedWorldMapAccess(
-          cityId,
-          helicopterPlacement
-        ),
-      ])
-
-      setPlacements(
-        synchronizedBuildings
-      )
-
-      setHelicopterPlacement(
-        synchronizedHelicopter
-      )
-
-      setSyncStatus(
-        "saved"
-      )
-    } catch (error) {
-      console.error(
-        "Impossible de publier les positions :",
-        error
-      )
-
-      setSyncStatus(
-        "error"
-      )
+      setSyncStatus("saving")
+      setSyncError(null)
+      const synchronizedBuildings = await saveSharedBuildingPlacements(cityId, placements)
+      setPlacements(synchronizedBuildings)
+      setSyncStatus("saved")
+    } catch (error: unknown) {
+      setSyncStatus("error")
+      const e = error as { code?: string; message?: string; details?: string; hint?: string }
+      setSyncError([e?.code, e?.message, e?.details, e?.hint].filter(Boolean).join(" | ") || String(error))
     }
   }
 
@@ -590,10 +261,6 @@ export default function MapEditor({
                 selectedType ===
                 type
 
-              const isHelicopter =
-                type ===
-                "helicopter"
-
               return (
                 <button
                   key={type}
@@ -605,23 +272,11 @@ export default function MapEditor({
                   }
                   className={`rounded-lg px-4 py-2 font-semibold transition ${
                     isSelected
-                      ? isHelicopter
-                        ? "bg-amber-600 text-white shadow-lg shadow-amber-950"
-                        : "bg-blue-600 text-white shadow-lg shadow-blue-950"
-                      : isHelicopter
-                        ? "border border-amber-500/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20"
-                        : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                      ? "bg-blue-600 text-white shadow-lg shadow-blue-950"
+                      : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
                   }`}
                 >
-                  {isHelicopter
-                    ? "🚁 "
-                    : ""}
-
-                  {
-                    getObjectName(
-                      type
-                    )
-                  }
+                  {getObjectName(type)}
                 </button>
               )
             }
@@ -640,10 +295,7 @@ export default function MapEditor({
             onClick={
               handlePublishNow
             }
-            disabled={
-              syncStatus ===
-              "saving"
-            }
+            disabled={syncStatus === "saving" || syncStatus === "loading" || readBlocked}
             className="rounded-lg border border-green-500/30 bg-green-700 px-4 py-2 text-sm font-black text-white transition hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-zinc-700"
           >
             {isAdmin
@@ -661,14 +313,26 @@ export default function MapEditor({
         {isAdmin ? (
           <>
             <strong>Modèle officiel des nouvelles villes.</strong>{" "}
-            Chaque déplacement publié ici est sauvegardé dans Supabase et devient la disposition de départ des futurs joueurs. Leur ville restera ensuite indépendante.
+            Une publication réussie est sauvegardée dans Supabase et devient le modèle de départ des futures villes. Aucun enregistrement automatique à l'ouverture.
           </>
         ) : (
           <>
-            Les bâtiments et l'hélicoptère sont enregistrés dans Supabase. Leur position reste identique sur ordinateur, téléphone et après un déploiement Vercel.
+            Les bâtiments peuvent être repositionnés librement. Clique sur Publier les positions pour les enregistrer dans Supabase.
           </>
         )}
       </div>
+
+      {syncStatus === "error" && (
+        <div role="alert" className="rounded-lg border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+          <strong>Synchronisation Supabase indisponible.</strong> Les positions restent modifiables localement, mais ne sont pas publiées. {readBlocked && "Publication verrouillée pour éviter un écrasement : corrige l’erreur puis recharge la page."}
+          {syncError && <pre className="mt-2 whitespace-pre-wrap break-all text-xs">{syncError}</pre>}
+        </div>
+      )}
+      {syncStatus === "local" && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-950/30 px-4 py-2 text-sm text-amber-200">
+          Positions locales non publiées : clique sur « Publier » quand tu es prêt.
+        </div>
+      )}
 
       <div
         data-editor-control
@@ -685,18 +349,8 @@ export default function MapEditor({
 
           <input
             type="range"
-            min={
-              selectedType ===
-                "helicopter"
-                ? "3"
-                : "3"
-            }
-            max={
-              selectedType ===
-                "helicopter"
-                ? "35"
-                : "40"
-            }
+            min="3"
+            max="40"
             step="0.5"
             value={
               selectedPlacement.width
@@ -834,14 +488,7 @@ export default function MapEditor({
         </div>
       </div>
 
-      <div
-        className={`rounded-lg border px-4 py-3 text-sm ${
-          selectedType ===
-            "helicopter"
-            ? "border-amber-500/25 bg-amber-500/10 text-amber-100"
-            : "border-blue-500/20 bg-blue-500/10 text-blue-100"
-        }`}
-      >
+      <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
         <strong>
           {
             getObjectName(
@@ -975,86 +622,12 @@ export default function MapEditor({
         )}
 
         <div
-          className="absolute"
-          style={{
-            left:
-              `${helicopterPlacement.x}%`,
-
-            top:
-              `${helicopterPlacement.y}%`,
-
-            width:
-              `${helicopterPlacement.width}%`,
-
-            zIndex:
-              helicopterPlacement.zIndex,
-
-            transform: `
-              translate(-50%, -50%)
-              rotate(${helicopterPlacement.rotation}deg)
-            `,
-
-            transformOrigin:
-              "center center",
-          }}
-        >
-          <div
-            className={`relative transition ${
-              selectedType ===
-                "helicopter"
-                ? "drop-shadow-[0_0_22px_rgba(251,191,36,1)]"
-                : "opacity-80"
-            }`}
-          >
-            <img
-              src="/world/helicopter.png"
-              alt="Hélicoptère"
-              className="pointer-events-none block w-full select-none"
-              draggable={false}
-            />
-
-            {selectedType ===
-              "helicopter" && (
-              <>
-                <div className="pointer-events-none absolute inset-0 rounded-xl border-2 border-amber-400" />
-
-                <div className="pointer-events-none absolute left-1/2 top-1/2 h-[70%] w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-amber-300/70" />
-              </>
-            )}
-          </div>
-
-          <div
-            className={`absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded px-2 py-1 text-xs font-bold ${
-              selectedType ===
-                "helicopter"
-                ? "bg-amber-600 text-white"
-                : "bg-black/70 text-amber-200"
-            }`}
-          >
-            🚁 Hélicoptère
-          </div>
-        </div>
-
-        <div
           data-editor-control
           className="absolute left-3 top-3 z-[120] rounded-lg bg-black/85 px-3 py-2 text-sm text-white"
         >
           Clique sur la carte pour
           déplacer{" "}
-          <strong
-            className={
-              selectedType ===
-                "helicopter"
-                ? "text-amber-300"
-                : "text-blue-300"
-            }
-          >
-            {
-              getObjectName(
-                selectedType
-              )
-            }
-          </strong>
+          <strong className="text-blue-300">{getObjectName(selectedType)}</strong>
         </div>
       </div>
     </div>
