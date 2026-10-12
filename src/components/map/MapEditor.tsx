@@ -312,8 +312,8 @@ export default function MapEditor({
       }`}>
         {isAdmin ? (
           <>
-            <strong>Modèle officiel des nouvelles villes.</strong>{" "}
-            Une publication réussie est sauvegardée dans Supabase et devient le modèle de départ des futures villes. Aucun enregistrement automatique à l'ouverture.
+            <strong>Modèle officiel de toutes les villes.</strong>{" "}
+            Une publication réussie est sauvegardée dans Supabase et sera affichée par les comptes existants et les futurs joueurs à leur prochain chargement. Aucun enregistrement automatique à l'ouverture.
           </>
         ) : (
           <>

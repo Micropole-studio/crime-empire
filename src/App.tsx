@@ -1081,6 +1081,7 @@ export default function App() {
             className="absolute inset-x-0 bottom-0 top-[calc(62px+env(safe-area-inset-top))] sm:top-[calc(72px+env(safe-area-inset-top))]"
           >
             <GameMap
+              isAdmin={Boolean(data.player.is_admin)}
               cityId={
                 String(
                   data.city.id

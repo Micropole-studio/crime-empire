@@ -12,6 +12,12 @@ import {
 
 import PixiCityScene from "./PixiCityScene"
 import SeaCanvasOverlay from "./SeaCanvasOverlay"
+import {
+  DEFAULT_CITY_VISUAL_SETTINGS,
+  loadCityVisualSettings,
+  publishCityVisualSettings,
+  type CityVisualSettings,
+} from "../../services/cityVisualSettingsService"
 
 import type {
   Building,
@@ -44,6 +50,7 @@ import {
 type Props = {
   cityId: string
   buildings: Building[]
+  isAdmin?: boolean
   onBuildingClick?: (
     id: string
   ) => void
@@ -104,6 +111,7 @@ const LUXURY_BUILDING_ASSETS: Record<BuildingType, string> = {
 export default function GameMap({
   cityId,
   buildings,
+  isAdmin = false,
   onBuildingClick,
   onWorldMapOpen,
 }: Props) {
@@ -184,46 +192,91 @@ export default function GameMap({
     setIsMoving,
   ] = useState(false)
 
-  // Comparaison sécurisée de l'ancien renderer DOM et du nouveau renderer GPU.
-  // Les interactions et les données du jeu restent exactement les mêmes.
-  const [pixiEnabled, setPixiEnabled] = useState(() => {
-    try {
-      return window.localStorage.getItem("crime-empire-city-renderer") !== "legacy"
-    } catch {
-      return true
-    }
-  })
-  // Bloc 1 graphique premium : entièrement visuel et réversible. Aucun impact sur Supabase ni la progression.
-  const [artStyle, setArtStyle] = useState<"classic" | "luxury">(() => {
-    try {
-      return window.localStorage.getItem("crime-empire-city-art") === "classic"
-        ? "classic" : "luxury"
-    } catch {
-      return "luxury"
-    }
-  })
-  function toggleArtStyle() {
-    const next = artStyle === "luxury" ? "classic" : "luxury"
-    setArtStyle(next)
-    try { window.localStorage.setItem("crime-empire-city-art", next) } catch { /* private mode */ }
-  }
+  // Le public ne choisit jamais le rendu depuis localStorage.
+  // Les préférences officielles sont publiées par l'admin dans Supabase.
+  const [artStyle, setArtStyle] = useState<CityVisualSettings["artStyle"]>(
+    DEFAULT_CITY_VISUAL_SETTINGS.artStyle
+  )
+  const [pixiEnabled, setPixiEnabled] = useState(
+    DEFAULT_CITY_VISUAL_SETTINGS.renderer === "pixi"
+  )
+  const [publishedVisualSettings, setPublishedVisualSettings] =
+    useState<CityVisualSettings>(DEFAULT_CITY_VISUAL_SETTINGS)
+  const [visualSyncStatus, setVisualSyncStatus] =
+    useState<"loading" | "ready" | "saving" | "error">("loading")
+  const [visualSyncError, setVisualSyncError] = useState<string | null>(null)
 
   const [pixiReady, setPixiReady] = useState(false)
   const [pixiUnavailable, setPixiUnavailable] = useState(false)
   const usePixiVisuals = pixiEnabled && pixiReady
   const [seaStatus, setSeaStatus] = useState<"loading" | "active" | "partial" | "fallback" | "paused" | "unavailable">("loading")
 
+  useEffect(() => {
+    let disposed = false
+
+    async function refreshPublishedSettings() {
+      try {
+        const settings = await loadCityVisualSettings()
+        if (disposed) return
+        setPublishedVisualSettings(settings)
+        setArtStyle(settings.artStyle)
+        setPixiEnabled(settings.renderer === "pixi")
+        // Ne pas remettre pixiReady à false sur un simple retour d'onglet :
+        // PixiCityScene ne se remonte pas si le renderer est inchangé.
+        setVisualSyncStatus("ready")
+        setVisualSyncError(null)
+      } catch (error) {
+        if (disposed) return
+        console.warn("Configuration graphique globale indisponible", error)
+        // Secours public : la version Premium reste imposée ;
+        // aucune ancienne valeur locale ne peut réapparaître.
+        setVisualSyncStatus("error")
+        setVisualSyncError(error instanceof Error ? error.message : String(error))
+      }
+    }
+
+    void refreshPublishedSettings()
+    const onFocus = () => { if (!document.hidden) void refreshPublishedSettings() }
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onFocus)
+    return () => {
+      disposed = true
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onFocus)
+    }
+  }, [cityId])
+
+  const visualDraftHasChanges =
+    publishedVisualSettings.artStyle !== artStyle ||
+    publishedVisualSettings.renderer !== (pixiEnabled ? "pixi" : "classic")
+
+  function toggleArtStyle() {
+    if (!isAdmin) return
+    setArtStyle(current => current === "luxury" ? "classic" : "luxury")
+  }
+
   function toggleRenderer() {
-    const next = !pixiEnabled
+    if (!isAdmin) return
     setPixiReady(false)
     setPixiUnavailable(false)
-    setPixiEnabled(next)
+    setPixiEnabled(current => !current)
+  }
+
+  async function publishVisualSettings() {
+    if (!isAdmin || visualSyncStatus !== "ready") return
+    setVisualSyncStatus("saving")
+    setVisualSyncError(null)
     try {
-      window.localStorage.setItem(
-        "crime-empire-city-renderer",
-        next ? "pixi" : "legacy",
-      )
-    } catch { /* mode navigation privée */ }
+      const published = await publishCityVisualSettings({
+        artStyle,
+        renderer: pixiEnabled ? "pixi" : "classic",
+      })
+      setPublishedVisualSettings(published)
+      setVisualSyncStatus("ready")
+    } catch (error) {
+      setVisualSyncStatus("error")
+      setVisualSyncError(error instanceof Error ? error.message : String(error))
+    }
   }
 
   const uniqueBuildings =
@@ -1425,68 +1478,63 @@ export default function GameMap({
         )}
       </div>
 
-      <div className="absolute bottom-20 left-3 z-20 flex flex-col items-start gap-2 md:bottom-4">
-        <button
-          type="button"
-          data-map-ui
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation()
-            toggleArtStyle()
-          }}
-          title="Changer les visuels de la ville sans toucher aux sauvegardes"
-          aria-pressed={artStyle === "luxury"}
-          className={`rounded-full border px-3 py-1.5 text-[10px] font-black tracking-wide shadow-lg backdrop-blur transition-colors ${
-            artStyle === "luxury"
-              ? "border-amber-300 bg-gradient-to-r from-amber-950/95 to-zinc-950/95 text-amber-100 hover:border-amber-100"
-              : "border-white/30 bg-zinc-950/85 text-white/80 hover:bg-zinc-800"
-          }`}
-        >
-          {artStyle === "luxury" ? "✦ Ville Premium · Bloc 1" : "↺ Ville Classique"}
-        </button>
-        <button
-          type="button"
-          data-map-ui
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation()
-            toggleRenderer()
-          }}
-          title="Comparer les graphismes PixiJS et l'ancien affichage"
-          className="rounded-full border border-amber-300/40 bg-zinc-950/85 px-3 py-1.5 text-[10px] font-bold text-amber-100 shadow-lg backdrop-blur hover:bg-zinc-800"
-        >
-          {pixiEnabled
-            ? pixiReady
-              ? "✦ Rendu PixiJS"
-              : pixiUnavailable
-                ? "▣ Rendu classique (secours)"
-                : "◌ PixiJS en chargement"
-            : "▣ Rendu classique"}
-        </button>
-        {artStyle === "luxury" && (
-          <div
-            aria-live="polite"
-            className={`pointer-events-none rounded-full border px-3 py-1 text-[10px] font-bold backdrop-blur ${
-              seaStatus === "active" ? "border-cyan-400/35 bg-cyan-950/80 text-cyan-100"
-                : seaStatus === "paused" ? "border-amber-400/40 bg-amber-950/75 text-amber-100"
-                  : seaStatus === "partial" || seaStatus === "fallback" || seaStatus === "unavailable"
-                    ? "border-rose-400/40 bg-rose-950/75 text-rose-100"
-                    : "border-white/20 bg-black/70 text-white/80"
-            }`}
-            title="État du calque marin indépendant du rendu PixiJS"
-          >
-            {seaStatus === "active" ? "🌊 Mer animée (2D)"
-              : seaStatus === "partial" ? "🌊 Mer animée · textures incomplètes"
-                : seaStatus === "fallback" ? "🌊 Vagues seules · textures manquantes"
-                  : seaStatus === "paused" ? "🌊 Mouvement réduit (système)"
-                    : seaStatus === "unavailable" ? "🌊 Canvas 2D indisponible"
-                      : "🌊 Chargement de la mer…"}
+      {/* Réglages de rendu uniquement visibles et publiables par l'administrateur. */}
+      {isAdmin && (
+        <div className="absolute bottom-20 left-3 z-20 flex flex-col items-start gap-2 md:bottom-4">
+          <div className="rounded-xl border border-amber-400/30 bg-zinc-950/90 p-2 shadow-xl backdrop-blur">
+            <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-amber-200">
+              Affichage officiel · Administrateur
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                data-map-ui
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => { event.stopPropagation(); toggleArtStyle() }}
+                aria-pressed={artStyle === "luxury"}
+                className="rounded-full border border-amber-300/40 bg-amber-950/80 px-3 py-1.5 text-[10px] font-bold text-amber-100"
+              >
+                {artStyle === "luxury" ? "Ville Premium" : "Ville classique"}
+              </button>
+              <button
+                type="button"
+                data-map-ui
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => { event.stopPropagation(); toggleRenderer() }}
+                className="rounded-full border border-amber-300/40 bg-zinc-900 px-3 py-1.5 text-[10px] font-bold text-amber-100"
+              >
+                {pixiEnabled ? (pixiReady ? "Rendu PixiJS" : pixiUnavailable ? "PixiJS (secours classique)" : "Chargement PixiJS") : "Rendu classique"}
+              </button>
+              <button
+                type="button"
+                data-map-ui
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => { event.stopPropagation(); void publishVisualSettings() }}
+                disabled={visualSyncStatus !== "ready" || !visualDraftHasChanges}
+                className="rounded-full border border-emerald-400/40 bg-emerald-800 px-3 py-1.5 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {visualSyncStatus === "saving" ? "Publication…" : "Publier pour tous"}
+              </button>
+            </div>
+            {visualDraftHasChanges && visualSyncStatus === "ready" && (
+              <p className="mt-1 text-[10px] text-amber-200">Prévisualisation admin : publication nécessaire pour les joueurs.</p>
+            )}
+            {visualSyncStatus === "error" && (
+              <p role="alert" className="mt-1 max-w-xs break-words text-[10px] text-rose-300">
+                Réglages non synchronisés : {visualSyncError}. Exécuter la migration SQL avant publication.
+              </p>
+            )}
           </div>
-        )}
-        <div className="pointer-events-none rounded-full border border-white/10 bg-black/65 px-3 py-1.5 text-[10px] font-bold text-white/80 backdrop-blur">
-          Glisser pour déplacer • pincer pour zoomer
+          {artStyle === "luxury" && (
+            <div className="pointer-events-none rounded-full border border-cyan-400/35 bg-cyan-950/80 px-3 py-1 text-[10px] font-bold text-cyan-100 backdrop-blur">
+              {seaStatus === "active" ? "🌊 Mer animée" : seaStatus === "paused" ? "🌊 Mouvement réduit" : "🌊 Mer : " + seaStatus}
+            </div>
+          )}
+          <div className="pointer-events-none rounded-full border border-white/10 bg-black/65 px-3 py-1.5 text-[10px] font-bold text-white/80 backdrop-blur">
+            Glisser pour déplacer • pincer pour zoomer
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="absolute bottom-20 right-3 z-30 flex flex-col gap-2 md:bottom-4">
         <MapControlButton
