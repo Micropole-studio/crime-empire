@@ -180,7 +180,7 @@ function getPlayerCityAsset(
   villaLevel: number
 ) {
   void villaLevel
-  return "/world/cities/world-city-villa.png"
+  return "/world/cities/world-city-premium.webp"
 }
 
 function formatNumber(
@@ -2222,7 +2222,7 @@ export default function WorldMap({
   }
 
   return (
-    <main className="relative h-full w-full overflow-hidden bg-black text-white">
+    <main className="ce-world-v2 relative h-full w-full overflow-hidden bg-black text-white">
       <div
         ref={
           viewportRef
@@ -2363,7 +2363,7 @@ export default function WorldMap({
 
       <header
         data-world-interactive
-        className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-3 px-3 sm:px-5"
+        className="ce-world-v2-header absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-3 px-3 sm:px-5"
         style={{
           paddingTop:
             "max(8px, env(safe-area-inset-top))",
@@ -2371,25 +2371,25 @@ export default function WorldMap({
       >
         <button
           type="button"
-          onClick={
-            onBack
-          }
-          className="pointer-events-auto rounded-xl border border-white/15 bg-black/80 px-4 py-2 text-sm font-black text-white shadow-xl backdrop-blur-xl transition hover:bg-zinc-900"
+          onClick={onBack}
+          className="ce-world-v2-back pointer-events-auto rounded-xl px-3 py-2 text-sm font-black shadow-xl transition sm:px-4"
+          aria-label="Retourner à ma ville"
         >
-          ← Retour à la ville
+          <span aria-hidden="true">‹</span>
+          <span>Ma ville</span>
         </button>
 
-        <div className="pointer-events-none flex items-center gap-2 rounded-full border border-white/10 bg-black/70 px-3 py-1.5 shadow-xl backdrop-blur-xl">
-          <span aria-hidden="true">🌐</span>
-          <span className="text-xs font-black text-white">
-            Région Sud
-          </span>
-          <span className="h-3 w-px bg-white/15" />
-          <span className="text-[10px] font-bold text-zinc-300">
-            {multiplayerLoading
-              ? "Synchronisation…"
-              : `${worldPlayers.length} empire${worldPlayers.length > 1 ? "s" : ""}`}
-          </span>
+        <div className="ce-world-v2-status pointer-events-none flex min-w-0 items-center gap-2 rounded-xl px-3 py-1.5 shadow-xl sm:gap-3 sm:px-4">
+          <span className="ce-world-v2-compass" aria-hidden="true">✦</span>
+          <div className="min-w-0">
+            <div className="ce-world-v2-kicker">CRIME EMPIRE · CARTE DU MONDE</div>
+            <div className="ce-world-v2-region">Région Sud</div>
+          </div>
+          <span className="ce-world-v2-separator" aria-hidden="true" />
+          <div className="ce-world-v2-counts">
+            <span>{multiplayerLoading ? "…" : worldPlayers.length} empires</span>
+            <span>{nodes.filter((node) => node.type !== "player_city").length} sites stratégiques</span>
+          </div>
         </div>
       </header>
 
@@ -2436,7 +2436,7 @@ export default function WorldMap({
 
       <div
         data-world-interactive
-        className="absolute right-3 top-24 z-30 flex flex-col gap-2"
+        className="ce-world-v2-controls absolute right-3 top-24 z-30 flex flex-col gap-2"
       >
         <WorldControlButton
           label="Zoom avant"
@@ -3130,7 +3130,7 @@ function WorldNodeMarker({
         </span>
 
         <span
-          className={`world-player-city-label pointer-events-none absolute min-w-max -translate-x-1/2 rounded-full border px-3 py-1 text-[15px] font-black tracking-[0.04em] shadow-lg backdrop-blur ${
+          className={`world-player-city-label ce-world-v2-city-label pointer-events-none absolute min-w-max -translate-x-1/2 rounded-full border px-3 py-1 text-[15px] font-black tracking-[0.04em] shadow-lg backdrop-blur ${
             isCurrent
               ? "border-blue-300/40 bg-blue-950/90 text-blue-100"
               : "border-red-300/30 bg-zinc-950/90 text-red-100"
@@ -3178,7 +3178,7 @@ function WorldNodeMarker({
       title={node.name}
     >
       <span
-        className={`world-background-hotspot pointer-events-none absolute inset-0 rounded-[22%] transition duration-150 ${
+        className={`world-background-hotspot ce-world-v2-hotspot pointer-events-none absolute inset-0 rounded-[22%] transition duration-150 ${
           selected ? "is-selected" : ""
         }`}
         style={{
@@ -4374,7 +4374,7 @@ function WorldControlButton({
         event.stopPropagation()
         onClick()
       }}
-      className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/80 text-lg font-black text-white shadow-xl backdrop-blur transition hover:bg-zinc-800"
+      className="ce-world-v2-control flex h-10 w-10 items-center justify-center rounded-xl text-lg font-black shadow-xl backdrop-blur transition"
     >
       {children}
     </button>
