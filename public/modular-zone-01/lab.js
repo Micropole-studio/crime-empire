@@ -1,159 +1,465 @@
-
 (() => {
   'use strict';
+  const $ = id => document.getElementById(id);
+  const status = $('scene-status');
   try {
-  const status = document.getElementById('scene-status');
-  const canvas = document.getElementById('scene');
-  if (!canvas) throw new Error('Canvas du laboratoire absent');
-  if (!status) throw new Error('Zone de diagnostic absente');
-  const ctx = canvas.getContext('2d', { alpha:false });
-  if (!ctx) {
-    status.textContent = '❌ Canvas 2D indisponible dans ce navigateur';
-    status.dataset.state = 'error';
-    return;
-  }
-  const selection = document.getElementById('selection');
-  const rows=9, cols=11, W=236, H=120;
-  const assets = {};
-  const file={concrete:'assets/concrete.webp',asphalt:'assets/asphalt.webp',grass:'assets/grass.webp',water:'assets/water.webp',villa:'assets/ville.webp',depot:'assets/depot.webp'};
-  let failedTextures = 0;
-  Object.entries(file).forEach(([key,url])=>{
-    const im = new Image();
-    im.onload = () => { assets[key] = im; dirty = true; };
-    im.onerror = () => {
-      failedTextures++;
-      status.textContent = '⚠️ Texture manquante : ' + url + ' — le terrain de secours reste visible';
-      status.dataset.state = 'warning';
-      dirty = true;
+    const canvas = $('scene');
+    const ctx = canvas?.getContext('2d', { alpha: false });
+    if (!canvas || !ctx) throw new Error('Canvas 2D indisponible');
+
+    const selection = $('selection');
+    const inspector = $('inspector');
+    const ROWS = 9, COLS = 11, W = 236, H = 120;
+    const STORAGE_KEY = 'crime-empire-modular-zone-02-local-v1';
+    const tileTypes = new Set(['road', 'plot', 'asphalt', 'concrete', 'grass', 'water']);
+    const imagePaths = {
+      concrete: 'assets/concrete.webp', asphalt: 'assets/asphalt.webp',
+      grass: 'assets/grass.webp', water: 'assets/water.webp',
+      villa: 'assets/ville.webp', depot: 'assets/depot.webp',
     };
-    im.src = url;
-  });
-  const base = Array.from({length:rows},(_,r)=>Array.from({length:cols},(_,c)=>{
-    if(c>=9 && r>=5 || c>=10&&r>=2)return 'water';
-    if(c===5||r===4)return 'road';
-    if((r===2&&c===3)||(r===6&&c===7)||(r===2&&c===8)||(r===6&&c===2))return 'plot';
-    return (r+c)%6===0?'grass':'concrete';
-  }));
-  let tiles=base.map(a=>a.slice()), tool='inspect', grid=false, dpr=1, cw=1,ch=1, zoom=0.9, ox=0,oy=0,dirty=true,last=0,focused=null, hovered=null;
-  const nodes=[{kind:'ville', name:'Villa / Joueur', r:2,c:3,src:'villa',width:330,desc:'Ville joueur · Coordonnées indépendantes du terrain'},{kind:'pve',name:'Dépôt clandestin',r:6,c:7,src:'depot',width:340,desc:'Point d’intérêt PvE · Sprite et zone de sélection indépendants'}];
-  const pointers=new Map();let drag=null;
-  const local=(r,c)=>({x:(c-r)*W/2,y:(c+r)*H/2});
-  const worldCenter=local((rows-1)/2,(cols-1)/2);
-  function setCanvas(){
-    const prevW=cw,prevH=ch;cw=canvas.clientWidth;ch=canvas.clientHeight;dpr=Math.min(window.devicePixelRatio||1,1.8);
-    canvas.width=Math.round(cw*dpr);canvas.height=Math.round(ch*dpr);
-    if(prevW<=1)resetCamera();else {ox+=(cw-prevW)/2;oy+=(ch-prevH)/2;}
-    dirty=true;
-  }
-  function resetCamera(){zoom=Math.min(1.16,Math.max(.55,Math.min(cw/2550,ch/1190)*1.15));ox=cw*.46-worldCenter.x*zoom;oy=ch*.52-worldCenter.y*zoom;dirty=true;}
-  function screenToTile(sx,sy){const x=(sx-ox)/zoom,y=(sy-oy)/zoom;const c=(x/(W/2)+y/(H/2))/2,r=(y/(H/2)-x/(W/2))/2;return {r:Math.round(r),c:Math.round(c)};}
-  function valid(r,c){return r>=0&&r<rows&&c>=0&&c<cols;}
-  function diamond(cx,cy){ctx.beginPath();ctx.moveTo(cx,cy-H/2);ctx.lineTo(cx+W/2,cy);ctx.lineTo(cx,cy+H/2);ctx.lineTo(cx-W/2,cy);ctx.closePath();}
-  function tex(kind,x,y,w,h){
-    if(assets[kind]){const p=ctx.createPattern(assets[kind],'repeat');ctx.fillStyle=p;
-      ctx.save();ctx.translate(x-w/2,y-h/2);ctx.fillRect(0,0,w,h);ctx.restore();}
-    else{ctx.fillStyle=kind==='water'?'#124057':kind==='grass'?'#38493e':kind==='asphalt'?'#282d30':'#575854';ctx.fillRect(x-w/2,y-h/2,w,h);}
-  }
-  function poly(points,fill,stroke){ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.stroke()}}
-  function glow(x,y,r,color){let grad=ctx.createRadialGradient(x,y,0,x,y,r);grad.addColorStop(0,color);grad.addColorStop(1,'#e7a54c00');ctx.fillStyle=grad;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill()}
-  function drawTile(r,c,t,ms){const p=local(r,c),x=p.x,y=p.y;
-    diamond(x,y);ctx.save();ctx.clip();tex(t==='road'?'asphalt':t==='plot'?'concrete':t,x,y,W,H);
-    if(t==='road'){
-      ctx.lineWidth=1.8;ctx.strokeStyle='#d2b36e6e';ctx.beginPath();ctx.moveTo(x-89,y-50);ctx.lineTo(x+89,y+50);ctx.stroke();
-      ctx.beginPath();ctx.moveTo(x-89,y+50);ctx.lineTo(x+89,y-50);ctx.stroke();
-      // route continue suivant les chemins transversaux
-      ctx.lineWidth=1.2;ctx.strokeStyle='#e3ce8c62';ctx.setLineDash([13,13]);
-      if(c===5){ctx.beginPath();ctx.moveTo(x+W/4,y-H/4);ctx.lineTo(x-W/4,y+H/4);ctx.stroke()}
-      else{ctx.beginPath();ctx.moveTo(x-W/4,y-H/4);ctx.lineTo(x+W/4,y+H/4);ctx.stroke()}
-      ctx.setLineDash([]);
+    const assets = {};
+    let imageErrors = 0;
+    let dirty = true;
+    const defaults = [
+      { id: 'villa', name: 'Villa joueur', kind: 'ville', src: 'villa', r: 2, c: 3, width: 330, rotation: 0, depth: 0 },
+      { id: 'depot', name: 'Dépôt clandestin', kind: 'pve', src: 'depot', r: 6, c: 7, width: 340, rotation: 0, depth: 0 },
+    ];
+    const defaultTiles = Array.from({ length: ROWS }, (_, r) => Array.from({ length: COLS }, (_, c) => {
+      if ((c >= 9 && r >= 5) || (c >= 10 && r >= 2)) return 'water';
+      if (c === 5 || r === 4) return 'road';
+      if ([[2, 3], [6, 7], [2, 8], [6, 2]].some(([rr, cc]) => rr === r && cc === c)) return 'plot';
+      return (r + c) % 6 === 0 ? 'grass' : 'concrete';
+    }));
+    const clone = value => JSON.parse(JSON.stringify(value));
+    const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+    function valid(r, c) { return r >= 0 && r < ROWS && c >= 0 && c < COLS; }
+    function validateState(data) {
+      if (!data || typeof data !== 'object' || !Array.isArray(data.tiles) || data.tiles.length !== ROWS) throw new Error('Tuiles incorrectes');
+      const tiles = data.tiles.map(row => {
+        if (!Array.isArray(row) || row.length !== COLS || !row.every(t => tileTypes.has(t))) throw new Error('Format des tuiles incorrect');
+        return row.slice();
+      });
+      if (!Array.isArray(data.nodes)) throw new Error('Bâtiments manquants');
+      const nodes = defaults.map(base => {
+        const incoming = data.nodes.find(n => n && n.id === base.id);
+        if (!incoming) return { ...base };
+        const result = { ...base };
+        for (const key of ['r', 'c', 'width', 'rotation', 'depth']) {
+          if (!Number.isFinite(incoming[key])) throw new Error('Coordonnée invalide : ' + key);
+        }
+        result.r = clamp(incoming.r, 0, ROWS - 1);
+        result.c = clamp(incoming.c, 0, COLS - 1);
+        result.width = clamp(Math.round(incoming.width / 10) * 10, 180, 510);
+        result.rotation = clamp(Math.round(incoming.rotation), -18, 18);
+        result.depth = clamp(Math.round(incoming.depth), -3, 3);
+        return result;
+      });
+      return { tiles, nodes };
     }
-    if(t==='plot'){
-      ctx.lineWidth=2;ctx.strokeStyle='#d9c08f79';ctx.beginPath();ctx.moveTo(x,y-H/2+9);ctx.lineTo(x+W/2-16,y);ctx.lineTo(x,y+H/2-9);ctx.lineTo(x-W/2+16,y);ctx.closePath();ctx.stroke();
-      ctx.strokeStyle='#dcb77822';ctx.lineWidth=6;ctx.stroke();
-      [[-44,-8],[44,-8],[-44,10],[44,10]].forEach(([dx,dy])=>{ctx.fillStyle='#c0a46c';ctx.fillRect(x+dx-1,y+dy-1,2,2)});
+    let state = { tiles: clone(defaultTiles), nodes: clone(defaults) };
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) state = validateState(JSON.parse(saved));
+    } catch (error) { console.warn('[Crime Empire V02] État local ignoré :', error); }
+    let saveHandle = 0;
+    function saveSoon() {
+      clearTimeout(saveHandle);
+      saveHandle = setTimeout(() => {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+        catch (error) { console.warn('Stockage local indisponible :', error); }
+      }, 250);
     }
-    if(t==='water'){
-      for(let i=0;i<7;i++){const vx=x-95+i*31+(Math.sin(ms*.0006+i+r*.9+c)*4),vy=y-28+i*7;
-        ctx.strokeStyle=i%2?'#a3d4d230':'#89bad74b';ctx.lineWidth=1.25;ctx.beginPath();ctx.moveTo(vx,vy);ctx.quadraticCurveTo(vx+14,vy-4,vx+27,vy-1);ctx.stroke();}
+    function updateStatus(message, type = 'ready') {
+      if (!status) return;
+      status.dataset.state = type;
+      status.textContent = message;
     }
-    if(t==='grass'){
-      for(let i=0;i<9;i++){const xx=x-74+((i*39+r*11+c*7)%152),yy=y-36+((i*13+c*19)%69);
-        ctx.fillStyle='#233e34a0';ctx.beginPath();ctx.arc(xx,yy,2.5,0,Math.PI*2);ctx.fill();}
+    for (const [key, src] of Object.entries(imagePaths)) {
+      const img = new Image();
+      img.onload = () => { assets[key] = img; dirty = true; };
+      img.onerror = () => {
+        imageErrors += 1;
+        updateStatus('⚠ Texture manquante : ' + src + ' ; fond de secours affiché', 'warning');
+        dirty = true;
+      };
+      img.src = src;
     }
-    ctx.restore();
-    ctx.strokeStyle=t==='water'?'#6ba2b42b':'#d0ba9140';ctx.lineWidth=.9;diamond(x,y);ctx.stroke();
-    if(grid){ctx.strokeStyle='#f5d18db8';ctx.lineWidth=1.1;diamond(x,y);ctx.stroke();ctx.fillStyle='#e7ca91';ctx.font='10px system-ui';ctx.textAlign='center';ctx.fillText(`${r}:${c}`,x,y+4)}
-    if(hovered && hovered.r===r&&hovered.c===c){ctx.strokeStyle='#e5bd67';ctx.lineWidth=2.5;diamond(x,y);ctx.stroke()}
-  }
-  function drawNode(node,ms){const {x,y}=local(node.r,node.c), img=assets[node.src],active=focused&&focused.kind===node.kind;const w=node.width,h=img?w*img.height/img.width:w*.75;
-    // paved foundation and contact shadow, sitting under the building's footprint
-    poly([[x,y-27],[x+91,y-1],[x,y+31],[x-91,y-1]],'#333637','#e1ba7463');
-    ctx.fillStyle='#070b0dbd';ctx.beginPath();ctx.ellipse(x,y+5,w*.30,16,0,0,Math.PI*2);ctx.fill();
-    glow(x-35,y-7,31,'#f4bb585a');glow(x+50,y-3,26,'#f6b3655a');
-    if(img)ctx.drawImage(img,x-w/2,y-h+17,w,h);else{ctx.fillStyle='#b7a07c';ctx.fillRect(x-w*.3,y-h*.6,w*.6,h*.4)}
-    const by=y-h+17;
-    if(active){ctx.strokeStyle='#edc77b';ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.strokeRect(x-w/2,by,w,h);ctx.setLineDash([])}
-    ctx.font='600 13px system-ui';ctx.textAlign='center';const title=node.name;const tw=ctx.measureText(title).width+40;const tagY=by-6;
-    ctx.fillStyle='#0b161ff0';ctx.strokeStyle='#dcb673a8';ctx.lineWidth=1;ctx.beginPath();ctx.roundRect(x-tw/2,tagY-23,tw,27,5);ctx.fill();ctx.stroke();ctx.fillStyle='#f2dcae';ctx.fillText(title,x,tagY-5);
-    return {x1:x-w/2,y1:by,x2:x+w/2,y2:by+h,node};
-  }
-  function render(ms){ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#111f2b';ctx.fillRect(0,0,cw,ch);
-    const back=ctx.createLinearGradient(0,0,0,ch);back.addColorStop(0,'#233440');back.addColorStop(.48,'#253238');back.addColorStop(1,'#081621');ctx.fillStyle=back;ctx.fillRect(0,0,cw,ch);
-    ctx.save();ctx.translate(ox,oy);ctx.scale(zoom,zoom);
-    const ordered=[];for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)ordered.push({r,c});ordered.sort((a,b)=>(a.r+a.c)-(b.r+b.c));
-    for(const v of ordered)drawTile(v.r,v.c,tiles[v.r][v.c],ms);
-    for(const v of ordered){const {r,c}=v;if((r+c)%5===0&&tiles[r][c]==='concrete'){
-      let p=local(r,c);ctx.fillStyle='#23392f';ctx.beginPath();ctx.ellipse(p.x,p.y,11,6,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#152d25';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x,p.y-22);ctx.stroke();ctx.fillStyle='#4e6850';for(let k=0;k<5;k++){ctx.beginPath();ctx.ellipse(p.x+Math.cos(k*1.25)*8,p.y-24+Math.sin(k*1.25)*3,8,3,k*1.25,0,7);ctx.fill()}
-    }}
-    nodes.sort((a,b)=>local(a.r,a.c).y-local(b.r,b.c).y).forEach(node=>drawNode(node,ms));
-    ctx.restore();
-    if(tool!=='inspect'){ctx.fillStyle='#edc779';ctx.font='11px system-ui';ctx.textAlign='left';ctx.fillText(`MODE ÉDITION : ${tool.toUpperCase()}`,20,Math.max(82,ch-70));}
-  }
-  let firstFrame = true;
-  function loop(ms){
-    if(dirty||ms-last>40){
-      try {
-        render(ms);
-        if (firstFrame) {
-          firstFrame = false;
-          if (status.dataset.state !== 'warning') {
-            status.textContent = '✅ Carte modulaire active';
-            status.dataset.state = 'ready';
+
+    let tool = 'move', grid = false, snap = true;
+    let cw = 1, ch = 1, dpr = 1;
+    let zoom = 1, ox = 0, oy = 0, lastFrame = 0;
+    let selectedId = null, hovered = null;
+    const pointers = new Map();
+    let gesture = null;
+    let needsFirstRender = true;
+    const local = (r, c) => ({ x: (c - r) * W / 2, y: (c + r) * H / 2 });
+    const worldCenter = local((ROWS - 1) / 2, (COLS - 1) / 2);
+    const screenToWorld = p => ({ x: (p.x - ox) / zoom, y: (p.y - oy) / zoom });
+    function worldToIso(x, y) { return { c: (x / (W / 2) + y / (H / 2)) / 2, r: (y / (H / 2) - x / (W / 2)) / 2 }; }
+    function screenToTile(p) {
+      const pos = screenToWorld(p);
+      const iso = worldToIso(pos.x, pos.y);
+      return { r: Math.round(iso.r), c: Math.round(iso.c) };
+    }
+    function resetCamera() {
+      zoom = Math.min(1.2, Math.max(.48, Math.min(cw / 2600, ch / 1280) * 1.3));
+      ox = cw * .47 - worldCenter.x * zoom;
+      oy = ch * .50 - worldCenter.y * zoom;
+      dirty = true;
+    }
+    function resize() {
+      const previousWidth = cw, previousHeight = ch;
+      cw = Math.max(1, canvas.clientWidth); ch = Math.max(1, canvas.clientHeight);
+      dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      canvas.width = Math.round(cw * dpr);
+      canvas.height = Math.round(ch * dpr);
+      if (previousWidth <= 1) resetCamera();
+      else { ox += (cw - previousWidth) / 2; oy += (ch - previousHeight) / 2; }
+      dirty = true;
+    }
+    function zoomAt(factor, anchor) {
+      const old = zoom;
+      zoom = clamp(old * factor, .34, 2.35);
+      ox = anchor.x - (anchor.x - ox) * zoom / old;
+      oy = anchor.y - (anchor.y - oy) * zoom / old;
+      dirty = true;
+    }
+    function focusNode() { return state.nodes.find(n => n.id === selectedId) || null; }
+    function updateInspector() {
+      const node = focusNode();
+      inspector.hidden = !node;
+      if (node) {
+        $('sizeRange').value = node.width;
+        $('rotationRange').value = node.rotation;
+        $('depthRange').value = node.depth;
+        $('sizeOutput').textContent = node.width + ' px';
+        $('rotationOutput').textContent = node.rotation + '°';
+        $('depthOutput').textContent = String(node.depth);
+        selection.innerHTML = '<b>' + node.name + '</b><br>Case ' + node.r.toFixed(2) + ' : ' + node.c.toFixed(2) + '<br><span style="color:#aab5bb">Glisse pour déplacer ou utilise les flèches. Les changements sont privés à ton navigateur.</span>';
+      } else {
+        selection.textContent = tool === 'move' ? 'Choisis la Villa ou le dépôt PvE, puis fais glisser. Glisse sur le terrain vide pour déplacer la caméra.' : tool === 'inspect' ? 'Clique sur une case ou un bâtiment pour l’inspecter.' : 'Peins les cases : clique et glisse sur le terrain.';
+      }
+    }
+    function selectNode(id) { selectedId = id; updateInspector(); dirty = true; }
+    function setTool(next) {
+      tool = next;
+      document.querySelectorAll('[data-tool]').forEach(btn => {
+        const active = btn.dataset.tool === tool;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-pressed', String(active));
+      });
+      updateInspector(); dirty = true;
+    }
+
+    function diamond(x, y) {
+      ctx.beginPath(); ctx.moveTo(x, y - H / 2); ctx.lineTo(x + W / 2, y);
+      ctx.lineTo(x, y + H / 2); ctx.lineTo(x - W / 2, y); ctx.closePath();
+    }
+    function polygon(points, fill, stroke) {
+      ctx.beginPath(); points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+      ctx.closePath(); if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
+    }
+    function baseTexture(t, x, y) {
+      const kind = t === 'road' ? 'asphalt' : t === 'plot' ? 'concrete' : t;
+      if (assets[kind]) {
+        const pattern = ctx.createPattern(assets[kind], 'repeat');
+        ctx.save(); ctx.translate(x - W / 2, y - H / 2);
+        ctx.fillStyle = pattern; ctx.fillRect(0, 0, W, H); ctx.restore();
+      } else {
+        ctx.fillStyle = { water: '#194257', grass: '#354b3b', asphalt: '#272c32', road: '#2b3035', plot: '#555452', concrete: '#555452' }[t] || '#42494d';
+        ctx.fillRect(x - W / 2, y - H / 2, W, H);
+      }
+      ctx.fillStyle = '#060e1850'; ctx.fillRect(x - W / 2, y - H / 2, W, H);
+    }
+    function drawTile(r, c, t, ms) {
+      const { x, y } = local(r, c);
+      ctx.save(); diamond(x, y); ctx.clip(); baseTexture(t, x, y);
+      if (t === 'road') {
+        // Ground routes follow the modular grid. Neighbours determine the edge connections.
+        ctx.strokeStyle = '#c9b4827a'; ctx.lineWidth = 1.6; ctx.setLineDash([13, 10]);
+        for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+          if (valid(r + dr, c + dc) && state.tiles[r + dr][c + dc] === 'road') {
+            const nx = x + (dc - dr) * W / 4;
+            const ny = y + (dc + dr) * H / 4;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(nx, ny); ctx.stroke();
           }
         }
-      } catch(error) {
-        status.textContent = '❌ Erreur de rendu : ' + (error?.message || String(error));
-        status.dataset.state = 'error';
-        console.error('[Crime Empire zone modulaire]', error);
+        ctx.setLineDash([]);
+        ctx.strokeStyle = '#dcb97838'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x - W / 3, y); ctx.lineTo(x, y - H / 2); ctx.lineTo(x + W / 3, y); ctx.stroke();
+      }
+      if (t === 'plot') {
+        ctx.lineWidth = 2.5; ctx.strokeStyle = '#f1cf8b8a';
+        polygon([[x, y - H / 2 + 11], [x + W / 2 - 21, y], [x, y + H / 2 - 11], [x - W / 2 + 21, y]], null, '#e3c18b7a');
+        for (const dx of [-44, 44]) for (const dy of [-7, 9]) { ctx.fillStyle = '#d8ad67'; ctx.fillRect(x + dx - 1.5, y + dy - 1.5, 3, 3); }
+      }
+      if (t === 'water') {
+        for (let i = 0; i < 8; i++) {
+          const xx = x - 105 + i * 29 + Math.sin(ms * .00063 + i + r + c) * 5;
+          const yy = y - 35 + i * 9;
+          ctx.strokeStyle = i % 2 ? '#b7e2db37' : '#86cee85b'; ctx.lineWidth = 1.8;
+          ctx.beginPath(); ctx.moveTo(xx, yy); ctx.quadraticCurveTo(xx + 14, yy - 5, xx + 31, yy - 1); ctx.stroke();
+        }
+      }
+      if (t === 'grass') {
+        for (let i = 0; i < 13; i++) {
+          const xx = x - 79 + (i * 41 + r * 13 + c * 7) % 158;
+          const yy = y - 34 + (i * 19 + c * 11) % 66;
+          ctx.fillStyle = i % 3 ? '#203b3199' : '#6c826452';
+          ctx.beginPath(); ctx.ellipse(xx, yy, 3.8, 2, 0, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      ctx.restore();
+      ctx.strokeStyle = '#c4a8774b'; ctx.lineWidth = .9; diamond(x, y); ctx.stroke();
+      if (grid) { ctx.strokeStyle = '#f5cb83b8'; ctx.lineWidth = 1.35; diamond(x, y); ctx.stroke(); ctx.fillStyle = '#edcc94'; ctx.font = '11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(r + ':' + c, x, y + 4); }
+      if (hovered?.r === r && hovered?.c === c) { ctx.strokeStyle = '#f0bf63'; ctx.lineWidth = 3; diamond(x, y); ctx.stroke(); }
+    }
+    function glow(x, y, radius, c) {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, radius);
+      g.addColorStop(0, c); g.addColorStop(1, '#ffb85400');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+    }
+    function drawNode(node) {
+      const { x, y } = local(node.r, node.c);
+      const img = assets[node.src], w = node.width, h = img ? w * img.height / img.width : w * .72;
+      const chosen = node.id === selectedId;
+      // Structural ground slab and two separate shadows remain fixed to terrain while image rotates visually.
+      ctx.save(); ctx.translate(x, y);
+      polygon([[0, -35], [103, -1], [103, 9], [0, 43], [-103, 9], [-103, -1]], '#182129', '#d9af6a78');
+      polygon([[0, -35], [103, -1], [0, 32], [-103, -1]], '#3b3e42', '#e0b879a3');
+      ctx.fillStyle = '#05080acb'; ctx.beginPath(); ctx.ellipse(4, 8, w * .36, 20, 0, 0, Math.PI * 2); ctx.fill();
+      glow(-48, -6, 48, '#ffc26366'); glow(57, -5, 46, '#f8b35f55');
+      ctx.save(); ctx.translate(0, 17); ctx.rotate(node.rotation * Math.PI / 180);
+      if (img) ctx.drawImage(img, -w / 2, -h, w, h);
+      else { ctx.fillStyle = '#b2a383'; ctx.fillRect(-w * .32, -h * .75, w * .64, h * .7); }
+      if (chosen) {
+        ctx.strokeStyle = '#f4cf8b'; ctx.lineWidth = 2.5; ctx.setLineDash([6, 7]);
+        ctx.strokeRect(-w / 2, -h, w, h); ctx.setLineDash([]);
+      }
+      ctx.restore();
+      ctx.strokeStyle = chosen ? '#f6d285' : '#c5aa72a1'; ctx.lineWidth = chosen ? 3 : 1.6;
+      ctx.beginPath(); ctx.ellipse(0, 0, 9, 4, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      const tagY = y - h + 5;
+      ctx.font = '600 14px system-ui'; ctx.textAlign = 'center';
+      const labelWidth = ctx.measureText(node.name).width + 36;
+      ctx.fillStyle = chosen ? '#49381eea' : '#071522ee'; ctx.strokeStyle = chosen ? '#f2c26a' : '#dcb67396'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(x - labelWidth / 2, tagY - 27, labelWidth, 27, 6); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f5dca9'; ctx.fillText(node.name, x, tagY - 9);
+    }
+    // Drawn back-to-front, with an optional explicit depth correction.
+    function sortedNodes() { return state.nodes.slice().sort((a, b) => (local(a.r, a.c).y + a.depth * 40) - (local(b.r, b.c).y + b.depth * 40)); }
+    function hitNodeAt(world) {
+      // First test sprite bounds; reversed painter order gives the frontmost object first.
+      const sorted = sortedNodes().reverse();
+      for (const n of sorted) {
+        const p = local(n.r, n.c), w = n.width;
+        const img = assets[n.src], h = img ? w * img.height / img.width : w * .72;
+        const dx = world.x - p.x, dy = world.y - p.y - 17;
+        const rad = -n.rotation * Math.PI / 180;
+        const rx = dx * Math.cos(rad) - dy * Math.sin(rad);
+        const ry = dx * Math.sin(rad) + dy * Math.cos(rad);
+        if (Math.abs(rx) <= w / 2 && ry >= -h && ry <= 6) return n;
+      }
+      return null;
+    }
+    function render(ms) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const bg = ctx.createLinearGradient(0, 0, 0, ch);
+      bg.addColorStop(0, '#233440'); bg.addColorStop(.48, '#253238'); bg.addColorStop(1, '#081621');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch);
+      ctx.save(); ctx.translate(ox, oy); ctx.scale(zoom, zoom);
+      const order = [];
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) order.push({ r, c });
+      order.sort((a, b) => (a.r + a.c) - (b.r + b.c));
+      for (const { r, c } of order) drawTile(r, c, state.tiles[r][c], ms);
+      for (const { r, c } of order) {
+        if ((r + c) % 5 !== 0 || state.tiles[r][c] !== 'concrete') continue;
+        const p = local(r, c);
+        ctx.fillStyle = '#182d25'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 10, 6, 0, 0, 7); ctx.fill();
+        ctx.strokeStyle = '#152d25'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, p.y - 23); ctx.stroke();
+        ctx.fillStyle = '#4e6850';
+        for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.ellipse(p.x + Math.cos(k * 1.25) * 8, p.y - 23 + Math.sin(k * 1.25) * 3, 8, 3, k * 1.25, 0, 7); ctx.fill(); }
+      }
+      for (const n of sortedNodes()) drawNode(n);
+      ctx.restore();
+      ctx.fillStyle = '#edc779'; ctx.font = '600 12px system-ui'; ctx.textAlign = 'left';
+      ctx.fillText('V02 · ' + (tool === 'move' ? 'DÉPLACEMENT' : tool === 'inspect' ? 'INSPECTION' : 'PEINTURE : ' + tool.toUpperCase()) + ' · Zoom ' + Math.round(zoom * 100) + '%', 19, Math.max(80, ch - 72));
+    }
+    function frame(ms) {
+      if (dirty || ms - lastFrame > 48) {
+        try {
+          render(ms);
+          if (needsFirstRender) {
+            needsFirstRender = false;
+            if (!imageErrors) updateStatus('✅ Zone Modulaire 02 active · Déplace les bâtiments');
+          }
+        } catch (error) {
+          updateStatus('❌ Erreur d’affichage : ' + (error?.message || String(error)), 'error');
+          console.error('[Crime Empire V02 rendu]', error);
+          return;
+        }
+        lastFrame = ms; dirty = false;
+      }
+      requestAnimationFrame(frame);
+    }
+    function canvasPosition(event) {
+      const b = canvas.getBoundingClientRect();
+      return { x: event.clientX - b.left, y: event.clientY - b.top };
+    }
+    function setTileAt(point) {
+      const t = screenToTile(point);
+      if (valid(t.r, t.c) && tileTypes.has(tool) && state.tiles[t.r][t.c] !== tool) {
+        state.tiles[t.r][t.c] = tool;
+        saveSoon(); dirty = true;
+        selection.innerHTML = '<b>Case ' + t.r + ':' + t.c + '</b><br>Revêtement : ' + tool + '<br><span style="color:#aab5bb">Essai enregistré dans ce navigateur.</span>';
+        return true;
+      }
+      return false;
+    }
+    function down(event) {
+      if (event.button !== undefined && event.button !== 0) return;
+      event.preventDefault();
+      canvas.setPointerCapture(event.pointerId);
+      const p = canvasPosition(event);
+      pointers.set(event.pointerId, p);
+      if (pointers.size >= 2) {
+        const pts = Array.from(pointers.values());
+        const mx = (pts[0].x + pts[1].x) / 2, my = (pts[0].y + pts[1].y) / 2;
+        gesture = { mode: 'pinch', dist: Math.max(1, Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)), midpoint: { x: mx, y: my } };
         return;
       }
-      last=ms; dirty=false;
+      const node = (tool === 'move' || tool === 'inspect') ? hitNodeAt(screenToWorld(p)) : null;
+      if (node) {
+        selectNode(node.id);
+        gesture = { mode: tool === 'move' ? 'node' : 'inspect', start: p, moved: false, nodeId: node.id, baseR: node.r, baseC: node.c, initial: p };
+      } else if (tileTypes.has(tool)) {
+        gesture = { mode: 'paint', start: p, moved: false }; setTileAt(p);
+      } else {
+        gesture = { mode: 'pan', start: p, moved: false };
+      }
+      dirty = true;
     }
-    requestAnimationFrame(loop);
-  }
-  const canvasPos=e=>{const rect=canvas.getBoundingClientRect();return{x:e.clientX-rect.left,y:e.clientY-rect.top}};
-  canvas.addEventListener('pointerdown',e=>{const p=canvasPos(e);canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,p);drag={sx:p.x,sy:p.y,ox,oy,moved:false};});
-  canvas.addEventListener('pointermove',e=>{const p=canvasPos(e);if(pointers.has(e.pointerId)){const old=pointers.get(e.pointerId);pointers.set(e.pointerId,p);if(pointers.size===1&&drag){ox+=p.x-old.x;oy+=p.y-old.y;drag.moved ||= Math.hypot(p.x-drag.sx,p.y-drag.sy)>7;}
-    if(pointers.size===2){const points=Array.from(pointers.values()),dist=Math.hypot(points[0].x-points[1].x,points[0].y-points[1].y);if(drag.prevDist)zoom=Math.min(2.1,Math.max(.35,zoom*dist/drag.prevDist));drag.prevDist=dist;drag.moved=true;}
-  }else{hovered=screenToTile(p.x,p.y);if(!valid(hovered.r,hovered.c))hovered=null;}dirty=true;});
-  canvas.addEventListener('pointerup',e=>{const p=canvasPos(e);const wasMoved=drag?.moved;pointers.delete(e.pointerId);if(!pointers.size){if(!wasMoved){const hit=screenToTile(p.x,p.y);if(valid(hit.r,hit.c)){
-      if(tool!=='inspect' && !nodes.some(n=>n.r===hit.r&&n.c===hit.c)){tiles[hit.r][hit.c]=tool;selection.innerHTML=`<b>Parcelle ${hit.r}:${hit.c}</b><br>Revêtement : ${tool}. Cette modification est uniquement une démonstration locale.`;}
-      else{const n=nodes.find(n=>Math.abs(n.c-hit.c)<=1&&Math.abs(n.r-hit.r)<=1);focused=n||null;selection.innerHTML=n?`<b>${n.name}</b><br>${n.desc}<br>Case : ${n.r}:${n.c}`:`<b>Parcelle ${hit.r}:${hit.c}</b><br>Type : ${tiles[hit.r][hit.c]} · coordonnées modifiables indépendamment`;}
-  }}drag=null;}dirty=true;});
-  canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);drag=null;dirty=true;});
-  canvas.addEventListener('wheel',e=>{e.preventDefault();const p=canvasPos(e),oldZoom=zoom;zoom=Math.max(.35,Math.min(2.1,zoom*(e.deltaY>0?.9:1.1)));ox=p.x-(p.x-ox)*zoom/oldZoom;oy=p.y-(p.y-oy)*zoom/oldZoom;dirty=true;},{passive:false});
-  document.querySelectorAll('.tile').forEach(btn=>btn.addEventListener('click',()=>{tool=btn.dataset.tool;document.querySelectorAll('.tile').forEach(t=>t.classList.toggle('active',t===btn));dirty=true;}));
-  document.getElementById('gridBtn').addEventListener('click',()=>{grid=!grid;document.getElementById('gridBtn').textContent='Grille : '+(grid?'oui':'non');dirty=true;});
-  document.getElementById('resetBtn').addEventListener('click',()=>{tiles=base.map(row=>row.slice());focused=null;selection.textContent='Carte réinitialisée. Aucune sauvegarde Supabase effectuée.';resetCamera();});
-  function zoomAround(mult){const x=cw*.43,y=ch*.5,old=zoom;zoom=Math.min(2.1,Math.max(.35,zoom*mult));ox=x-(x-ox)*zoom/old;oy=y-(y-oy)*zoom/old;dirty=true;}
-  document.getElementById('zoomIn').onclick=()=>zoomAround(1.17);document.getElementById('zoomOut').onclick=()=>zoomAround(1/1.17);document.getElementById('home').onclick=resetCamera;
-  window.addEventListener('resize',setCanvas);setCanvas();requestAnimationFrame(loop);
-  } catch(error) {
-    const status = document.getElementById('scene-status');
-    if (status) {
-      status.textContent = '❌ Initialisation impossible : ' + (error?.message || String(error));
-      status.dataset.state = 'error';
+    function move(event) {
+      const p = canvasPosition(event);
+      const old = pointers.get(event.pointerId);
+      if (!old) {
+        hovered = screenToTile(p); if (!valid(hovered.r, hovered.c)) hovered = null;
+        dirty = true; return;
+      }
+      pointers.set(event.pointerId, p);
+      if (!gesture) return;
+      if (pointers.size === 2 && gesture.mode === 'pinch') {
+        const pts = Array.from(pointers.values());
+        const center = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+        const distance = Math.max(1, Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y));
+        ox += center.x - gesture.midpoint.x; oy += center.y - gesture.midpoint.y;
+        zoomAt(distance / gesture.dist, center);
+        gesture.dist = distance; gesture.midpoint = center;
+      } else if (pointers.size === 1 && gesture.start) {
+        gesture.moved ||= Math.hypot(p.x - gesture.start.x, p.y - gesture.start.y) > 4;
+        if (gesture.mode === 'pan' || gesture.mode === 'inspect') { ox += p.x - old.x; oy += p.y - old.y; }
+        else if (gesture.mode === 'node') {
+          const node = state.nodes.find(n => n.id === gesture.nodeId);
+          if (node) {
+            const delta = worldToIso((p.x - gesture.initial.x) / zoom, (p.y - gesture.initial.y) / zoom);
+            node.r = clamp(gesture.baseR + delta.r, 0, ROWS - 1);
+            node.c = clamp(gesture.baseC + delta.c, 0, COLS - 1);
+          }
+        } else if (gesture.mode === 'paint') setTileAt(p);
+      }
+      dirty = true;
     }
-    console.error('[Crime Empire zone modulaire : initialisation]', error);
+    function up(event) {
+      const p = canvasPosition(event);
+      const isLast = pointers.size === 1;
+      pointers.delete(event.pointerId);
+      if (!isLast) { gesture = null; dirty = true; return; }
+      const g = gesture;
+      gesture = null;
+      if (g?.mode === 'node') {
+        const n = state.nodes.find(n => n.id === g.nodeId);
+        if (n) {
+          if (snap) { n.r = Math.round(n.r); n.c = Math.round(n.c); }
+          saveSoon(); selectNode(n.id);
+        }
+      } else if (g && !g.moved && (g.mode === 'pan' || g.mode === 'inspect')) {
+        const node = hitNodeAt(screenToWorld(p));
+        if (node) selectNode(node.id);
+        else {
+          selectNode(null);
+          const tile = screenToTile(p);
+          if (valid(tile.r, tile.c)) selection.innerHTML = '<b>Case ' + tile.r + ':' + tile.c + '</b><br>Terrain : ' + state.tiles[tile.r][tile.c];
+        }
+      }
+      dirty = true;
+    }
+    canvas.addEventListener('pointerdown', down);
+    canvas.addEventListener('pointermove', move);
+    canvas.addEventListener('pointerup', up);
+    canvas.addEventListener('pointercancel', event => { pointers.delete(event.pointerId); gesture = null; dirty = true; });
+    canvas.addEventListener('lostpointercapture', event => { pointers.delete(event.pointerId); if (!pointers.size) gesture = null; });
+    canvas.addEventListener('wheel', event => { event.preventDefault(); zoomAt(event.deltaY > 0 ? .90 : 1.10, canvasPosition(event)); }, { passive: false });
+    document.querySelectorAll('[data-tool]').forEach(btn => btn.addEventListener('click', () => setTool(btn.dataset.tool)));
+    $('gridBtn').addEventListener('click', () => { grid = !grid; $('gridBtn').textContent = 'Grille : ' + (grid ? 'oui' : 'non'); $('gridBtn').setAttribute('aria-pressed', String(grid)); dirty = true; });
+    $('snapBtn').addEventListener('click', () => { snap = !snap; $('snapBtn').textContent = 'Aimantation : ' + (snap ? 'oui' : 'non'); $('snapBtn').setAttribute('aria-pressed', String(snap)); dirty = true; });
+    function applyToSelected(key, value) { const n = focusNode(); if (!n) return; n[key] = value; saveSoon(); updateInspector(); dirty = true; }
+    $('sizeRange').addEventListener('input', e => applyToSelected('width', Number(e.target.value)));
+    $('rotationRange').addEventListener('input', e => applyToSelected('rotation', Number(e.target.value)));
+    $('depthRange').addEventListener('input', e => applyToSelected('depth', Number(e.target.value)));
+    $('resetNodeBtn').addEventListener('click', () => {
+      const n = focusNode(); if (!n) return;
+      const original = defaults.find(x => x.id === n.id);
+      Object.assign(n, { r: original.r, c: original.c, width: original.width, rotation: original.rotation, depth: original.depth });
+      saveSoon(); updateInspector(); dirty = true;
+    });
+    function nudge(dr, dc) {
+      const n = focusNode(); if (!n) return;
+      n.r = clamp(n.r + dr, 0, ROWS - 1); n.c = clamp(n.c + dc, 0, COLS - 1);
+      if (snap) { n.r = Math.round(n.r); n.c = Math.round(n.c); }
+      saveSoon(); updateInspector(); dirty = true;
+    }
+    document.querySelectorAll('[data-nudge]').forEach(btn => btn.addEventListener('click', () => {
+      const [dr, dc] = btn.dataset.nudge.split(',').map(Number); nudge(dr, dc);
+    }));
+    window.addEventListener('keydown', e => {
+      if (!selectedId || e.target?.closest?.('input,select,textarea,button')) return;
+      const directions = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+      if (directions[e.key]) { e.preventDefault(); nudge(...directions[e.key]); }
+      if (e.key === 'Escape') selectNode(null);
+    });
+    $('resetBtn').addEventListener('click', () => {
+      if (!confirm('Réinitialiser le terrain et les deux bâtiments du laboratoire ? Cela ne touche pas à Supabase.')) return;
+      state = { tiles: clone(defaultTiles), nodes: clone(defaults) };
+      selectedId = null; saveSoon(); updateInspector(); resetCamera();
+    });
+    $('exportBtn').addEventListener('click', () => {
+      const file = new Blob([JSON.stringify({ version: 2, ...state }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a'); a.href = url; a.download = 'crime-empire-zone-modulaire-02.json'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+    });
+    $('importBtn').addEventListener('click', () => $('importInput').click());
+    $('importInput').addEventListener('change', async event => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      try {
+        if (file.size > 400000) throw new Error('Fichier trop volumineux');
+        state = validateState(JSON.parse(await file.text()));
+        saveSoon(); updateInspector(); dirty = true; updateStatus('✅ Configuration du prototype importée');
+      } catch (error) { updateStatus('❌ Import impossible : ' + (error?.message || String(error)), 'error'); }
+      event.target.value = '';
+    });
+    $('zoomIn').addEventListener('click', () => zoomAt(1.17, { x: cw * .44, y: ch * .5 }));
+    $('zoomOut').addEventListener('click', () => zoomAt(1 / 1.17, { x: cw * .44, y: ch * .5 }));
+    $('home').addEventListener('click', resetCamera);
+    window.addEventListener('resize', resize);
+    window.addEventListener('pagehide', () => { clearTimeout(saveHandle); try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* private browsing */ } });
+    setTool('move'); resize(); requestAnimationFrame(frame);
+  } catch (error) {
+    console.error('[Crime Empire V02 init]', error);
+    if (status) { status.dataset.state = 'error'; status.textContent = '❌ Initialisation impossible : ' + (error?.message || String(error)); }
   }
 })();
