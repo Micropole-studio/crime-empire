@@ -10,25 +10,34 @@
     const selection = $('selection');
     const inspector = $('inspector');
     const ROWS = 9, COLS = 11, W = 236, H = 120;
-    const STORAGE_KEY = 'crime-empire-modular-zone-03-local-v1';
-    const OLD_STORAGE_KEY = 'crime-empire-modular-zone-02-local-v1';
+    const STORAGE_KEY = 'crime-empire-modular-zone-04-local-v1';
+    const OLD_STORAGE_KEY = 'crime-empire-modular-zone-03-local-v1';
     const tileTypes = new Set(['road', 'plot', 'asphalt', 'concrete', 'grass', 'water']);
     const imagePaths = {
       concrete: 'assets/concrete.webp', asphalt: 'assets/asphalt.webp',
       grass: 'assets/grass.webp', water: 'assets/water.webp',
-      villa: 'assets/ville-v03.webp', depot: 'assets/depot-v03.webp',
+      villa: 'assets/villa-premium.webp', depot: 'assets/depot-premium.webp',
+      jardin: 'assets/jardin-premium.webp', ilot: 'assets/ilot-premium.webp', portail: 'assets/portail-premium.webp',
     };
     const assets = {};
+    const texturePatterns = {};
     let imageErrors = 0;
     let dirty = true;
-    // r/c represent the TOP-LEFT occupied tile, not the sprite's visual center.
+    // r/c = top-left footprint grid cell. Visual height NEVER changes occupancy.
     const defs = {
-      villa: { rows: 4, cols: 4, spriteScale: .83, footY: .37, label: 'Villa / QG' },
-      depot: { rows: 3, cols: 3, spriteScale: .85, footY: .32, label: 'Dépôt PvE' },
+      villa:   { rows: 2, cols: 2, spriteScale: .93, label: 'Villa / QG',     floor: 'luxury' },
+      depot:   { rows: 3, cols: 3, spriteScale: .92, label: 'Dépôt PvE',      floor: 'industrial' },
+      jardin:  { rows: 1, cols: 1, spriteScale: .87, label: 'Jardin tropical', floor: 'garden' },
+      ilot:    { rows: 1, cols: 1, spriteScale: .85, label: 'Îlot paysager',  floor: 'garden' },
+      portail: { rows: 1, cols: 2, spriteScale: .91, label: 'Portail',        floor: 'luxury' },
     };
+    const decorationTypes = new Set(['jardin', 'ilot', 'portail']);
     const defaults = [
-      { id: 'villa', name: 'Villa / QG', kind: 'ville', src: 'villa', r: 0, c: 0, visualScale: 100, depth: 0 },
-      { id: 'depot', name: 'Dépôt clandestin', kind: 'pve', src: 'depot', r: 5, c: 1, visualScale: 100, depth: 0 },
+      { id: 'villa', name: 'Villa / QG', kind: 'ville', src: 'villa', r: 0, c: 1, visualScale: 100, depth: 0 },
+      { id: 'depot', name: 'Dépôt PvE', kind: 'pve', src: 'depot', r: 5, c: 1, visualScale: 100, depth: 0 },
+      { id: 'jardin-1', name: 'Jardin tropical', kind: 'decor', src: 'jardin', r: 1, c: 6, visualScale: 100, depth: 0 },
+      { id: 'ilot-1', name: 'Îlot paysager', kind: 'decor', src: 'ilot', r: 6, c: 7, visualScale: 100, depth: 0 },
+      { id: 'portail-1', name: 'Portail', kind: 'decor', src: 'portail', r: 2, c: 3, visualScale: 100, depth: 0 },
     ];
     const defaultTiles = Array.from({ length: ROWS }, (_, r) => Array.from({ length: COLS }, (_, c) => {
       if ((c >= 9 && r >= 5) || (c >= 10 && r >= 2)) return 'water';
@@ -40,13 +49,13 @@
     const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
     function valid(r, c) { return r >= 0 && r < ROWS && c >= 0 && c < COLS; }
     function footprint(node, r = node.r, c = node.c) {
-      const { rows, cols } = defs[node.id];
+      const { rows, cols } = defs[node.src];
       const cells = [];
       for (let dr = 0; dr < rows; dr++) for (let dc = 0; dc < cols; dc++) cells.push([r + dr, c + dc]);
       return cells;
     }
     function bounds(node, r = node.r, c = node.c) {
-      const d = defs[node.id];
+      const d = defs[node.src];
       const center = local(r + (d.rows - 1) / 2, c + (d.cols - 1) / 2);
       // Corner coordinates are obtained from the outermost tile CORNERS.
       const corners = [
@@ -71,7 +80,7 @@
       }
       return { ok: true, reason: 'Emplacement valide' };
     }
-    function validateState(data, migrateV02 = false) {
+    function validateState(data, importFromV03 = false) {
       if (!data || typeof data !== 'object' || !Array.isArray(data.tiles) || data.tiles.length !== ROWS)
         throw new Error('Tuiles incorrectes');
       const tiles = data.tiles.map(row => {
@@ -79,20 +88,37 @@
           throw new Error('Format des tuiles incorrect');
         return row.slice();
       });
-      if (!Array.isArray(data.nodes)) throw new Error('Bâtiments manquants');
-      const nodes = defaults.map(base => {
-        const incoming = data.nodes.find(n => n && n.id === base.id);
-        if (!incoming) return { ...base };
-        if (!Number.isFinite(incoming.r) || !Number.isFinite(incoming.c))
-          throw new Error('Coordonnée invalide pour ' + base.id);
-        const { rows, cols } = defs[base.id];
-        const r = migrateV02 ? incoming.r - (rows - 1) / 2 : incoming.r;
-        const c = migrateV02 ? incoming.c - (cols - 1) / 2 : incoming.c;
-        const visualScale = Number.isFinite(incoming.visualScale) ? incoming.visualScale : 100;
-        return { ...base, r: clamp(Math.round(r), 0, ROWS - rows), c: clamp(Math.round(c), 0, COLS - cols),
-          visualScale: clamp(Math.round(visualScale), 65, 105), depth: clamp(Math.round(incoming.depth || 0), -3, 3) };
-      });
-      return { tiles, nodes };
+      if (!Array.isArray(data.nodes) || data.nodes.length > 30) throw new Error('Bâtiments invalides');
+      const sourceNodes = [...data.nodes];
+      if (importFromV03) {
+        // Conserver la Villa, le dépôt et le terrain de la V03 ; ajouter les nouveaux décors.
+        for (const node of defaults.slice(2)) sourceNodes.push(node);
+      }
+      const accepted = [];
+      const ids = new Set();
+      // Villa & PvE obligatoires ; les décorations sont facultatives et peuvent être supprimées.
+      const required = defaults.slice(0, 2).map(base =>
+        sourceNodes.find(n => n && n.id === base.id) || base);
+      for (const raw of [...required, ...sourceNodes.filter(n => n && decorationTypes.has(n.src))]) {
+        if (!raw || !defs[raw.src] || typeof raw.id !== 'string' || !/^[a-z0-9-]{1,48}$/.test(raw.id) || ids.has(raw.id)) continue;
+        ids.add(raw.id);
+        const d = defs[raw.src];
+        const r = clamp(Math.round(Number(raw.r) || 0), 0, ROWS - d.rows);
+        const c = clamp(Math.round(Number(raw.c) || 0), 0, COLS - d.cols);
+        const node = {
+          id: raw.id, name: d.label, kind: raw.src === 'villa' ? 'ville' : raw.src === 'depot' ? 'pve' : 'decor',
+          src: raw.src, r, c,
+          visualScale: clamp(Math.round(Number(raw.visualScale) || 100), 75, 110),
+          depth: clamp(Math.round(Number(raw.depth) || 0), -3, 3),
+        };
+        // Never accept invalid overlaps as saved state.
+        if (footprint(node).some(([rr,cc]) => !valid(rr,cc) || ['road','water'].includes(tiles[rr][cc]) ||
+             accepted.some(other => footprint(other).some(([or,oc]) => or === rr && oc === cc)))) continue;
+        accepted.push(node);
+      }
+      for (const base of defaults.slice(0,2)) if (!accepted.some(n => n.id === base.id))
+        throw new Error('La Villa ou le dépôt chevauche une route : déplace-le avant import');
+      return { tiles, nodes: accepted };
     }
     let state = { tiles: clone(defaultTiles), nodes: clone(defaults) };
     let migrated = false;
@@ -102,17 +128,13 @@
       else {
         const old = localStorage.getItem(OLD_STORAGE_KEY);
         if (old) {
-          const candidate = validateState(JSON.parse(old), true);
-          // Do not import old coordinates if they cross roads/water/one another.
-          const backup = state;
-          state = candidate;
-          const ok = state.nodes.every(n => placementStatus(n).ok);
-          state = ok ? candidate : { tiles: candidate.tiles, nodes: clone(defaults) };
-          if (!state.nodes.every(n => placementStatus(n).ok)) state = backup;
-          migrated = true;
+          // Les anciennes positions étaient celles d'une empreinte 4×4 ; la nouvelle 2×2
+          // garde la même case d'origine plutôt que de bouger arbitrairement la ville.
+          try { state = validateState(JSON.parse(old), true); migrated = true; }
+          catch (e) { console.info('[Crime Empire V04] Ancien essai ignoré :', e); }
         }
       }
-    } catch (error) { console.warn('[Crime Empire V03] État local ignoré :', error); }
+    } catch (error) { console.warn('[Crime Empire V04] État local ignoré :', error); }
     let saveHandle = 0;
     function saveSoon() {
       clearTimeout(saveHandle);
@@ -128,7 +150,7 @@
     }
     for (const [key, src] of Object.entries(imagePaths)) {
       const img = new Image();
-      img.onload = () => { assets[key] = img; dirty = true; };
+      img.onload = () => { assets[key] = img; if (['concrete','asphalt','grass','water'].includes(key)) texturePatterns[key] = ctx.createPattern(img, 'repeat'); dirty = true; };
       img.onerror = () => {
         imageErrors += 1;
         updateStatus('⚠ Texture manquante : ' + src + ' ; fond de secours affiché', 'warning');
@@ -181,7 +203,7 @@
       const node = focusNode();
       inspector.hidden = !node;
       if (node) {
-        const d = defs[node.id];
+        const d = defs[node.src];
         const validity = placementStatus(node);
         $('sizeRange').value = node.visualScale;
         $('depthRange').value = node.depth;
@@ -190,6 +212,7 @@
         $('footprintOutput').textContent = d.rows + ' × ' + d.cols + ' · ' + (d.rows * d.cols) + ' cases';
         $('placementOutput').textContent = validity.ok ? '✓ Placement valide' : '✕ ' + validity.reason;
         $('placementOutput').dataset.valid = String(validity.ok);
+        $('removeNodeBtn').hidden = !decorationTypes.has(node.src);
         selection.innerHTML = '<b>' + node.name + '</b><br>Départ : ligne ' + node.r + ', colonne ' + node.c +
           '<br><span style="color:#aab5bb">Empreinte fixe ' + d.rows + '×' + d.cols + '. Déplacement aimanté à la grille.</span>';
       } else {
@@ -219,7 +242,7 @@
     function baseTexture(t, x, y) {
       const kind = t === 'road' ? 'asphalt' : t === 'plot' ? 'concrete' : t;
       if (assets[kind]) {
-        const pattern = ctx.createPattern(assets[kind], 'repeat');
+        const pattern = texturePatterns[kind] || ctx.createPattern(assets[kind], 'repeat');
         ctx.save(); ctx.translate(x - W / 2, y - H / 2);
         ctx.fillStyle = pattern; ctx.fillRect(0, 0, W, H); ctx.restore();
       } else {
@@ -287,11 +310,16 @@
       if (!isTop) {
         // A level, exact footprint slab: all corners coincide with the tile grid.
         const skirt = geo.corners.map(p => [p.x, p.y + 10]);
-        polygon([...corners.slice(2), ...skirt.slice(2).reverse()], '#141a21dd', null);
-        polygon(corners, '#515459bb', '#dfc18a88');
+        // Two downward visible faces form a grounded slab, same size as the occupied tiles.
+        polygon([corners[1], corners[2], skirt[2], skirt[1]], '#242327', '#68563b7a');
+        polygon([corners[2], corners[3], skirt[3], skirt[2]], '#12191b', '#564b3c80');
+        const slab = ctx.createLinearGradient(geo.center.x, geo.center.y-geo.height*.5, geo.center.x, geo.center.y+geo.height*.5);
+        slab.addColorStop(0, geo.floor === 'industrial' ? '#36383d' : geo.floor === 'garden' ? '#424a3b' : '#5b5750');
+        slab.addColorStop(1, geo.floor === 'industrial' ? '#262d33' : geo.floor === 'garden' ? '#303d34' : '#45413f');
+        polygon(corners, slab, '#dbc18d88');
         const center = geo.center;
-        ctx.fillStyle = '#00000038'; ctx.beginPath();
-        ctx.ellipse(center.x + 8, center.y + geo.height * .14, geo.width * .28, geo.height * .15, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#00000024'; ctx.beginPath();
+        ctx.ellipse(center.x + 4, center.y + geo.height * .16, geo.width * .24, geo.height * .13, 0, 0, Math.PI * 2); ctx.fill();
         const occupied = footprint(node);
         for (const [r, c] of occupied) {
           const pt = local(r, c);
@@ -321,11 +349,12 @@
       const h = img ? w * img.height / img.width : w * .7;
       const chosen = node.id === selectedId;
       const validity = placementStatus(node);
-      const baseY = y + geo.height * geo.footY;
+      // Sprite's last opaque pixel lands exactly at the SOUTH TIP of the footprint slab.
+      const baseY = Math.max(...geo.corners.map(p => p.y)) - 3;
       ctx.save();
-      ctx.fillStyle = '#07090c2f';
-      ctx.beginPath(); ctx.ellipse(x, y + geo.height * .14, geo.width * .28, geo.height * .12, 0, 0, Math.PI * 2); ctx.fill();
-      glow(x - w * .29, y, 43, '#ffc2634d'); glow(x + w * .29, y, 43, '#f8b35f33');
+      ctx.fillStyle = '#05060858';
+      ctx.beginPath(); ctx.ellipse(x, y + geo.height * .24, geo.width * .33, geo.height * .16, 0, 0, Math.PI * 2); ctx.fill();
+      if (node.kind !== 'decor') { glow(x - w * .29, y, 38, '#ffc2633b'); glow(x + w * .29, y, 38, '#f8b35f28'); }
       if (img) ctx.drawImage(img, x - w / 2, baseY - h, w, h);
       else { ctx.fillStyle = '#b2a383'; ctx.fillRect(x - w * .36, baseY - h * .72, w * .72, h * .72); }
       if (!validity.ok) {
@@ -343,13 +372,13 @@
       ctx.fillStyle = '#f5dca9'; ctx.fillText(tag, x, tagY - 8);
     }
     // Drawn back-to-front, with an optional explicit depth correction.
-    function sortedNodes() { return state.nodes.slice().sort((a, b) => (bounds(a).center.y + a.depth * 40) - (bounds(b).center.y + b.depth * 40)); }
+    function sortedNodes() { return state.nodes.slice().sort((a, b) => (Math.max(...bounds(a).corners.map(p => p.y)) + a.depth * 40) - (Math.max(...bounds(b).corners.map(p => p.y)) + b.depth * 40)); }
     function hitNodeAt(world) {
       for (const n of sortedNodes().reverse()) {
         const geo = bounds(n), p = geo.center, img = assets[n.src];
         const w = geo.width * geo.spriteScale * (n.visualScale / 100);
         const h = img ? w * img.height / img.width : w * .7;
-        const baseY = p.y + geo.height * geo.footY;
+        const baseY = Math.max(...geo.corners.map(corner => corner.y)) - 3;
         if (world.x >= p.x - w / 2 && world.x <= p.x + w / 2 && world.y >= baseY - h && world.y <= baseY) return n;
         // Clicks on slab also select the building.
         const iso = worldToIso(world.x, world.y);
@@ -380,19 +409,19 @@
       for (const n of sortedNodes()) drawNode(n);
       ctx.restore();
       ctx.fillStyle = '#edc779'; ctx.font = '600 12px system-ui'; ctx.textAlign = 'left';
-      ctx.fillText('V03 · ' + (tool === 'move' ? 'DÉPLACEMENT' : tool === 'inspect' ? 'INSPECTION' : 'PEINTURE : ' + tool.toUpperCase()) + ' · Zoom ' + Math.round(zoom * 100) + '%', 19, Math.max(80, ch - 72));
+      ctx.fillText('V04 · ' + (tool === 'move' ? 'DÉPLACEMENT' : tool === 'inspect' ? 'INSPECTION' : 'PEINTURE : ' + tool.toUpperCase()) + ' · Zoom ' + Math.round(zoom * 100) + '%', 19, Math.max(80, ch - 72));
     }
     function frame(ms) {
-      if (dirty || ms - lastFrame > 48) {
+      if (dirty || ms - lastFrame > 80) {
         try {
           render(ms);
           if (needsFirstRender) {
             needsFirstRender = false;
-            if (!imageErrors) updateStatus('✅ Zone Modulaire 03 · Empreintes et snap actifs' + (migrated ? ' · Ancien essai V02 importé' : ''));
+            if (!imageErrors) updateStatus('✅ Zone Modulaire 04 · Villa 2×2, décors et snap actifs' + (migrated ? ' · Ancien essai V02 importé' : ''));
           }
         } catch (error) {
           updateStatus('❌ Erreur d’affichage : ' + (error?.message || String(error)), 'error');
-          console.error('[Crime Empire V03 rendu]', error);
+          console.error('[Crime Empire V04 rendu]', error);
           return;
         }
         lastFrame = ms; dirty = false;
@@ -463,7 +492,7 @@
           const node = state.nodes.find(n => n.id === gesture.nodeId);
           if (node) {
             const delta = worldToIso((p.x - gesture.initial.x) / zoom, (p.y - gesture.initial.y) / zoom);
-            const spec = defs[node.id];
+            const spec = defs[node.src];
             const rr = clamp(Math.round(gesture.baseR + delta.r), 0, ROWS - spec.rows);
             const cc = clamp(Math.round(gesture.baseC + delta.c), 0, COLS - spec.cols);
             node.r = rr; node.c = cc;
@@ -487,7 +516,7 @@
           if (!status.ok) {
             n.r = g.lastValidR; n.c = g.lastValidC;
             updateStatus('⛔ Placement refusé : ' + status.reason, 'warning');
-          } else updateStatus('✅ ' + n.name + ' calé sur ' + defs[n.id].rows + '×' + defs[n.id].cols + ' cases');
+          } else updateStatus('✅ ' + n.name + ' calé sur ' + defs[n.src].rows + '×' + defs[n.src].cols + ' cases');
           saveSoon(); selectNode(n.id);
         }
       } else if (g && !g.moved && (g.mode === 'pan' || g.mode === 'inspect')) {
@@ -512,9 +541,34 @@
     function applyToSelected(key, value) { const n = focusNode(); if (!n) return; n[key] = value; saveSoon(); updateInspector(); dirty = true; }
     $('sizeRange').addEventListener('input', e => applyToSelected('visualScale', Number(e.target.value)));
     $('depthRange').addEventListener('input', e => applyToSelected('depth', Number(e.target.value)));
+    let decorSerial = Date.now();
+    function addDecoration(type) {
+      if (!decorationTypes.has(type)) return;
+      if (state.nodes.length >= 20) { updateStatus('Limite de 20 objets pour ce prototype', 'warning'); return; }
+      const d = defs[type];
+      const node = { id: type + '-' + (++decorSerial), name: d.label, kind: 'decor', src: type, r: 0, c: 0, visualScale: 100, depth: 0 };
+      let found = false;
+      // Prefer empty sites around the perimeter, then search the rest.
+      for (let r = 0; r <= ROWS - d.rows && !found; r++) for (let c = COLS - d.cols; c >= 0; c--) {
+        if (placementStatus(node, r, c).ok) { node.r = r; node.c = c; found = true; break; }
+      }
+      if (!found) { updateStatus('Aucune case libre pour ' + d.label, 'warning'); return; }
+      state.nodes.push(node); selectNode(node.id); saveSoon(); dirty = true;
+      updateStatus('✅ ' + d.label + ' ajouté · déplace-le sur la grille');
+    }
+    document.querySelectorAll('[data-add]').forEach(btn => btn.addEventListener('click', () => {
+      addDecoration(btn.dataset.add);
+      setTool('move');
+    }));
+    $('removeNodeBtn').addEventListener('click', () => {
+      const node = focusNode(); if (!node || !decorationTypes.has(node.src)) return;
+      state.nodes = state.nodes.filter(n => n.id !== node.id);
+      selectNode(null); saveSoon(); updateStatus('Décoration retirée du laboratoire'); dirty = true;
+    });
     $('resetNodeBtn').addEventListener('click', () => {
       const n = focusNode(); if (!n) return;
       const original = defaults.find(x => x.id === n.id);
+      if (!original) { updateStatus('Pas de position d’origine pour cet objet ajouté', 'warning'); return; }
       const old = { r: n.r, c: n.c };
       Object.assign(n, { r: original.r, c: original.c, visualScale: original.visualScale, depth: original.depth });
       if (!placementStatus(n).ok) Object.assign(n, old);
@@ -522,7 +576,7 @@
     });
     function nudge(dr, dc) {
       const n = focusNode(); if (!n) return;
-      const spec = defs[n.id];
+      const spec = defs[n.src];
       const r = clamp(n.r + dr, 0, ROWS - spec.rows), c = clamp(n.c + dc, 0, COLS - spec.cols);
       const status = placementStatus(n, r, c);
       if (!status.ok) { updateStatus('⛔ Déplacement impossible : ' + status.reason, 'warning'); return; }
@@ -539,14 +593,14 @@
       if (e.key === 'Escape') selectNode(null);
     });
     $('resetBtn').addEventListener('click', () => {
-      if (!confirm('Réinitialiser le terrain et les deux bâtiments du laboratoire ? Cela ne touche pas à Supabase.')) return;
+      if (!confirm('Réinitialiser le terrain, la Villa 2×2, le dépôt et les décorations ? Rien ne sera modifié dans Supabase.')) return;
       state = { tiles: clone(defaultTiles), nodes: clone(defaults) };
       selectedId = null; saveSoon(); updateInspector(); resetCamera();
     });
     $('exportBtn').addEventListener('click', () => {
-      const file = new Blob([JSON.stringify({ version: 3, footprint: { villa: [4, 4], depot: [3, 3] }, ...state }, null, 2)], { type: 'application/json' });
+      const file = new Blob([JSON.stringify({ version: 4, footprint: Object.fromEntries(Object.entries(defs).map(([k, v]) => [k, [v.rows, v.cols]])), ...state }, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(file);
-      const a = document.createElement('a'); a.href = url; a.download = 'crime-empire-zone-modulaire-03.json'; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = 'crime-empire-zone-modulaire-04.json'; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 3000);
     });
     $('importBtn').addEventListener('click', () => $('importInput').click());
@@ -567,7 +621,7 @@
     window.addEventListener('pagehide', () => { clearTimeout(saveHandle); try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* private browsing */ } });
     setTool('move'); resize(); requestAnimationFrame(frame);
   } catch (error) {
-    console.error('[Crime Empire V03 init]', error);
+    console.error('[Crime Empire V04 init]', error);
     if (status) { status.dataset.state = 'error'; status.textContent = '❌ Initialisation impossible : ' + (error?.message || String(error)); }
   }
 })();

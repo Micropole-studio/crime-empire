@@ -24,3 +24,9 @@ button{font:inherit;cursor:pointer}.tile{padding:10px 7px;text-align:left;border
 .footprint-data strong{color:#efd2a0}.footprint-data output{color:#d8e3de}
 #placementOutput[data-valid="true"]{color:#92e6b8}#placementOutput[data-valid="false"]{color:#ffa0a0}
 .snap-locked{font-size:11px;border:1px solid #4d906f;padding:11px 8px;border-radius:8px;background:#11372c;color:#a4ebc8;display:flex;align-items:center;justify-content:center}
+
+/* V04 premium sprites + decorations */
+.tiles-add{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.tiles-add .tile{font-size:10px;min-width:0;padding:7px 5px;justify-content:center;text-align:center}
+#removeNodeBtn[hidden]{display:none}
+@media(max-width:580px){.tiles-add{grid-template-columns:repeat(3,minmax(0,1fr))}.tiles-add .tile{font-size:10px}}
