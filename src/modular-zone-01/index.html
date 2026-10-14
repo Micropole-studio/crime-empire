@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Crime Empire — Zone Modulaire 01</title>
+<style>
+:root{color-scheme:dark;--gold:#e5be7b;--gold2:#977545;--panel:#0c141dcf;--line:#d6b27344;--text:#f0e9d9;--muted:#aeb5b8}
+*{box-sizing:border-box}body{margin:0;background:#0a1119;color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+#scene{display:block;touch-action:none;position:absolute;inset:0;width:100%;height:100%;cursor:grab}#scene:active{cursor:grabbing}
+.screen-tint{position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 52%,transparent 27%,#02060e80 100%);z-index:1}
+header{position:fixed;top:0;left:0;right:0;padding:17px 21px;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:3;background:linear-gradient(#060c13e8,#060c1380 75%,transparent)}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}.crest{width:46px;height:46px;border:1px solid #d4ab61ad;border-radius:8px;background:linear-gradient(160deg,#8b6e3c,#1a1f25 65%);display:grid;place-items:center;color:#e6ca94;font-family:Georgia,serif;font-size:24px;box-shadow:0 0 0 3px #0e19259c}
+.brand b{display:block;letter-spacing:.13em;text-transform:uppercase;font-family:Georgia,serif;font-size:20px}.brand small{display:block;color:#d8b57c;letter-spacing:.14em;font-size:10px;margin-top:4px}
+.tag{color:#c9d2d4;border:1px solid #d9b87855;background:#0b161fd6;border-radius:999px;padding:9px 14px;font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+.sidebar{position:fixed;right:20px;top:100px;width:273px;max-height:calc(100vh - 172px);overflow-y:auto;z-index:3;background:linear-gradient(150deg,#152332f3,#0a121df2);border:1px solid #cfa76854;border-radius:16px;padding:19px;box-shadow:0 16px 70px #000b;backdrop-filter:blur(13px)}
+.sidebar h2{font-family:Georgia,serif;font-weight:normal;font-size:24px;margin:0 0 10px;color:#f7ddae}.sidebar p{color:#b3bdc1;font-size:12px;line-height:1.6;margin:0 0 16px}.eyebrow{text-transform:uppercase;letter-spacing:.22em;color:var(--gold);font-size:10px;margin-bottom:10px;font-weight:bold}
+.caption{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:#bbb9b0;margin:16px 0 9px}.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+button{font:inherit;cursor:pointer}.tile{padding:10px 8px;text-align:left;border:1px solid #66707973;background:#1b2b3785;border-radius:8px;color:#e5e2dc;font-size:12px;min-height:53px;display:flex;align-items:center;gap:7px}.tile.active{color:#ffe3b1;border-color:#e9bb67;background:#6c4b213f;box-shadow:inset 0 0 0 1px #efc77533}.tile svg{flex-shrink:0}
+.btn{background:linear-gradient(#d1a968,#a98143);border:1px solid #ffe4a0;box-shadow:0 4px 18px #0005;border-radius:8px;padding:11px 13px;color:#141920;font-weight:800;font-size:12px}.btn.ghost{background:#101f2bd4;border-color:#6a7a80;color:#e2e4e3}.btnrow{display:flex;flex-wrap:wrap;gap:7px}.btnrow>*{flex:1}
+.selection{border-top:1px solid #9c89504f;margin-top:14px;padding-top:12px;font-size:12px;color:#d5dddb;min-height:68px;line-height:1.6}
+.selection b{color:#f7d594}.status{font-size:11px;color:#95c9ae;display:flex;align-items:center;gap:7px;padding-top:10px}.status:before{content:"";width:7px;height:7px;background:#7ad6a6;border-radius:50%;box-shadow:0 0 9px #5bdba1}
+.bottom{position:fixed;bottom:17px;left:18px;right:318px;z-index:3;display:flex;align-items:end;justify-content:space-between;gap:13px;pointer-events:none}.bottom>*{pointer-events:auto}
+.hint{background:#081421d8;border:1px solid #d7bd8950;border-radius:11px;padding:11px 14px;font-size:12px;color:#c2cdd1;backdrop-filter:blur(12px);box-shadow:0 10px 25px #0006}.hint strong{color:#f3d9ad}.controls{display:flex;gap:5px}.controls button{background:#0b1724ef;border:1px solid #c8a26780;border-radius:8px;color:#e6c586;width:39px;height:38px;font-size:20px}
+.header-left{display:flex;gap:18px;align-items:center}
+@media(max-width:900px){header{padding:13px}.tag{display:none}.sidebar{top:auto;right:10px;left:10px;bottom:76px;max-height:42vh;width:auto;padding:12px}.sidebar h2{font-size:18px}.sidebar p{display:none}.eyebrow{display:none}.caption{margin:9px 0}.tile{min-height:38px;font-size:11px}.selection{margin-top:7px;min-height:25px}.brand b{font-size:16px}.crest{width:37px;height:37px}.bottom{right:10px;bottom:8px;left:10px}.hint{font-size:10px;padding:9px}.controls button{width:35px;height:35px}}
+@media(max-width:420px){.hint{max-width:64%;}.sidebar{max-height:37vh}}
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="Scène modulaire interactive : utilisez les outils pour éditer les tuiles et déplacez la carte"></canvas>
+<div class="screen-tint"></div>
+<header><div class="header-left"><div class="brand"><div class="crest">CE</div><div><b>Crime Empire</b><small>Prototype · Zone modulaire 01</small></div></div></div><div class="tag">Région Sud · Laboratoire graphique · Hors Supabase</div></header>
+<aside class="sidebar">
+  <div class="eyebrow">World map / prototype 01</div>
+  <h2>Construire le secteur</h2>
+  <p>Chaque parcelle est indépendante. Change son terrain, zoome, déplace la caméra et observe le raccord des bâtiments.</p>
+  <div class="caption">Outil de peinture</div>
+  <div class="tiles">
+    <button class="tile active" data-tool="inspect">⌖ &nbsp;Inspecter</button>
+    <button class="tile" data-tool="concrete">▧ &nbsp;Béton</button>
+    <button class="tile" data-tool="asphalt">▰ &nbsp;Asphalte</button>
+    <button class="tile" data-tool="grass">♣ &nbsp;Terrain</button>
+    <button class="tile" data-tool="water">≈ &nbsp;Eau</button>
+    <button class="tile" data-tool="plot">◇ &nbsp;Parcelle</button>
+  </div>
+  <div class="caption">Visualisation</div>
+  <div class="btnrow"><button class="btn ghost" id="gridBtn">Grille : non</button><button class="btn ghost" id="resetBtn">Réinitialiser</button></div>
+  <div class="selection" id="selection"><b>Villa Premium</b> et <b>dépôt PvE</b> indépendants du terrain. Clique sur une parcelle ou un bâtiment pour l'inspecter.</div>
+  <div class="status">Aucune requête réseau · Données du jeu intactes</div>
+</aside>
+<div class="bottom"><div class="hint"><strong>Déplacer :</strong> glisser · <strong>Zoom :</strong> molette/pincer · <strong>Modifier :</strong> choisir une tuile puis cliquer</div><div class="controls"><button aria-label="Dézoomer" id="zoomOut">−</button><button aria-label="Recentrer" id="home">⌂</button><button aria-label="Zoomer" id="zoomIn">+</button></div></div>
+<script>
+(() => {
+  'use strict';
+  const canvas = document.getElementById('scene');
+  const ctx = canvas.getContext('2d', { alpha:false, desynchronized:true });
+  const selection = document.getElementById('selection');
+  const rows=9, cols=11, W=236, H=120;
+  const assets = {};
+  const file={concrete:'assets/concrete.webp',asphalt:'assets/asphalt.webp',grass:'assets/grass.webp',water:'assets/water.webp',villa:'assets/ville.webp',depot:'assets/depot.webp'};
+  Object.entries(file).forEach(([key,url])=>{let im=new Image();im.src=url;im.onload=()=>{assets[key]=im;dirty=true;};});
+  const base = Array.from({length:rows},(_,r)=>Array.from({length:cols},(_,c)=>{
+    if(c>=9 && r>=5 || c>=10&&r>=2)return 'water';
+    if(c===5||r===4)return 'road';
+    if((r===2&&c===3)||(r===6&&c===7)||(r===2&&c===8)||(r===6&&c===2))return 'plot';
+    return (r+c)%6===0?'grass':'concrete';
+  }));
+  let tiles=base.map(a=>a.slice()), tool='inspect', grid=false, dpr=1, cw=1,ch=1, zoom=0.9, ox=0,oy=0,dirty=true,last=0,focused=null, hovered=null;
+  const nodes=[{kind:'ville', name:'Villa / Joueur', r:2,c:3,src:'villa',width:330,desc:'Ville joueur · Coordonnées indépendantes du terrain'},{kind:'pve',name:'Dépôt clandestin',r:6,c:7,src:'depot',width:340,desc:'Point d’intérêt PvE · Sprite et zone de sélection indépendants'}];
+  const pointers=new Map();let drag=null;
+  const local=(r,c)=>({x:(c-r)*W/2,y:(c+r)*H/2});
+  const worldCenter=local((rows-1)/2,(cols-1)/2);
+  function setCanvas(){
+    const prevW=cw,prevH=ch;cw=canvas.clientWidth;ch=canvas.clientHeight;dpr=Math.min(window.devicePixelRatio||1,1.8);
+    canvas.width=Math.round(cw*dpr);canvas.height=Math.round(ch*dpr);
+    if(prevW<=1)resetCamera();else {ox+=(cw-prevW)/2;oy+=(ch-prevH)/2;}
+    dirty=true;
+  }
+  function resetCamera(){zoom=Math.min(1.16,Math.max(.55,Math.min(cw/2550,ch/1190)*1.15));ox=cw*.46-worldCenter.x*zoom;oy=ch*.52-worldCenter.y*zoom;dirty=true;}
+  function screenToTile(sx,sy){const x=(sx-ox)/zoom,y=(sy-oy)/zoom;const c=(x/(W/2)+y/(H/2))/2,r=(y/(H/2)-x/(W/2))/2;return {r:Math.round(r),c:Math.round(c)};}
+  function valid(r,c){return r>=0&&r<rows&&c>=0&&c<cols;}
+  function diamond(cx,cy){ctx.beginPath();ctx.moveTo(cx,cy-H/2);ctx.lineTo(cx+W/2,cy);ctx.lineTo(cx,cy+H/2);ctx.lineTo(cx-W/2,cy);ctx.closePath();}
+  function tex(kind,x,y,w,h){
+    if(assets[kind]){const p=ctx.createPattern(assets[kind],'repeat');ctx.fillStyle=p;
+      ctx.save();ctx.translate(x-w/2,y-h/2);ctx.fillRect(0,0,w,h);ctx.restore();}
+    else{ctx.fillStyle=kind==='water'?'#124057':kind==='grass'?'#38493e':kind==='asphalt'?'#282d30':'#575854';ctx.fillRect(x-w/2,y-h/2,w,h);}
+  }
+  function poly(points,fill,stroke){ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.stroke()}}
+  function glow(x,y,r,color){let grad=ctx.createRadialGradient(x,y,0,x,y,r);grad.addColorStop(0,color);grad.addColorStop(1,'#e7a54c00');ctx.fillStyle=grad;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill()}
+  function drawTile(r,c,t,ms){const p=local(r,c),x=p.x,y=p.y;
+    diamond(x,y);ctx.save();ctx.clip();tex(t==='road'?'asphalt':t==='plot'?'concrete':t,x,y,W,H);
+    if(t==='road'){
+      ctx.lineWidth=1.8;ctx.strokeStyle='#d2b36e6e';ctx.beginPath();ctx.moveTo(x-89,y-50);ctx.lineTo(x+89,y+50);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(x-89,y+50);ctx.lineTo(x+89,y-50);ctx.stroke();
+      // route continue suivant les chemins transversaux
+      ctx.lineWidth=1.2;ctx.strokeStyle='#e3ce8c62';ctx.setLineDash([13,13]);
+      if(c===5){ctx.beginPath();ctx.moveTo(x+W/4,y-H/4);ctx.lineTo(x-W/4,y+H/4);ctx.stroke()}
+      else{ctx.beginPath();ctx.moveTo(x-W/4,y-H/4);ctx.lineTo(x+W/4,y+H/4);ctx.stroke()}
+      ctx.setLineDash([]);
+    }
+    if(t==='plot'){
+      ctx.lineWidth=2;ctx.strokeStyle='#d9c08f79';ctx.beginPath();ctx.moveTo(x,y-H/2+9);ctx.lineTo(x+W/2-16,y);ctx.lineTo(x,y+H/2-9);ctx.lineTo(x-W/2+16,y);ctx.closePath();ctx.stroke();
+      ctx.strokeStyle='#dcb77822';ctx.lineWidth=6;ctx.stroke();
+      [[-44,-8],[44,-8],[-44,10],[44,10]].forEach(([dx,dy])=>{ctx.fillStyle='#c0a46c';ctx.fillRect(x+dx-1,y+dy-1,2,2)});
+    }
+    if(t==='water'){
+      for(let i=0;i<7;i++){const vx=x-95+i*31+(Math.sin(ms*.0006+i+r*.9+c)*4),vy=y-28+i*7;
+        ctx.strokeStyle=i%2?'#a3d4d230':'#89bad74b';ctx.lineWidth=1.25;ctx.beginPath();ctx.moveTo(vx,vy);ctx.quadraticCurveTo(vx+14,vy-4,vx+27,vy-1);ctx.stroke();}
+    }
+    if(t==='grass'){
+      for(let i=0;i<9;i++){const xx=x-74+((i*39+r*11+c*7)%152),yy=y-36+((i*13+c*19)%69);
+        ctx.fillStyle='#233e34a0';ctx.beginPath();ctx.arc(xx,yy,2.5,0,Math.PI*2);ctx.fill();}
+    }
+    ctx.restore();
+    ctx.strokeStyle=t==='water'?'#6ba2b42b':'#d0ba9140';ctx.lineWidth=.9;diamond(x,y);ctx.stroke();
+    if(grid){ctx.strokeStyle='#f5d18db8';ctx.lineWidth=1.1;diamond(x,y);ctx.stroke();ctx.fillStyle='#e7ca91';ctx.font='10px system-ui';ctx.textAlign='center';ctx.fillText(`${r}:${c}`,x,y+4)}
+    if(hovered && hovered.r===r&&hovered.c===c){ctx.strokeStyle='#e5bd67';ctx.lineWidth=2.5;diamond(x,y);ctx.stroke()}
+  }
+  function drawNode(node,ms){const {x,y}=local(node.r,node.c), img=assets[node.src],active=focused&&focused.kind===node.kind;const w=node.width,h=img?w*img.height/img.width:w*.75;
+    // paved foundation and contact shadow, sitting under the building's footprint
+    poly([[x,y-27],[x+91,y-1],[x,y+31],[x-91,y-1]],'#333637','#e1ba7463');
+    ctx.fillStyle='#070b0dbd';ctx.beginPath();ctx.ellipse(x,y+5,w*.30,16,0,0,Math.PI*2);ctx.fill();
+    glow(x-35,y-7,31,'#f4bb585a');glow(x+50,y-3,26,'#f6b3655a');
+    if(img)ctx.drawImage(img,x-w/2,y-h+17,w,h);else{ctx.fillStyle='#b7a07c';ctx.fillRect(x-w*.3,y-h*.6,w*.6,h*.4)}
+    const by=y-h+17;
+    if(active){ctx.strokeStyle='#edc77b';ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.strokeRect(x-w/2,by,w,h);ctx.setLineDash([])}
+    ctx.font='600 13px system-ui';ctx.textAlign='center';const title=node.name;const tw=ctx.measureText(title).width+40;const tagY=by-6;
+    ctx.fillStyle='#0b161ff0';ctx.strokeStyle='#dcb673a8';ctx.lineWidth=1;ctx.beginPath();ctx.roundRect(x-tw/2,tagY-23,tw,27,5);ctx.fill();ctx.stroke();ctx.fillStyle='#f2dcae';ctx.fillText(title,x,tagY-5);
+    return {x1:x-w/2,y1:by,x2:x+w/2,y2:by+h,node};
+  }
+  function render(ms){ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#111f2b';ctx.fillRect(0,0,cw,ch);
+    const back=ctx.createLinearGradient(0,0,0,ch);back.addColorStop(0,'#233440');back.addColorStop(.48,'#253238');back.addColorStop(1,'#081621');ctx.fillStyle=back;ctx.fillRect(0,0,cw,ch);
+    ctx.save();ctx.translate(ox,oy);ctx.scale(zoom,zoom);
+    const ordered=[];for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)ordered.push({r,c});ordered.sort((a,b)=>(a.r+a.c)-(b.r+b.c));
+    for(const v of ordered)drawTile(v.r,v.c,tiles[v.r][v.c],ms);
+    for(const v of ordered){const {r,c}=v;if((r+c)%5===0&&tiles[r][c]==='concrete'){
+      let p=local(r,c);ctx.fillStyle='#23392f';ctx.beginPath();ctx.ellipse(p.x,p.y,11,6,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#152d25';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x,p.y-22);ctx.stroke();ctx.fillStyle='#4e6850';for(let k=0;k<5;k++){ctx.beginPath();ctx.ellipse(p.x+Math.cos(k*1.25)*8,p.y-24+Math.sin(k*1.25)*3,8,3,k*1.25,0,7);ctx.fill()}
+    }}
+    nodes.sort((a,b)=>local(a.r,a.c).y-local(b.r,b.c).y).forEach(node=>drawNode(node,ms));
+    ctx.restore();
+    if(tool!=='inspect'){ctx.fillStyle='#edc779';ctx.font='11px system-ui';ctx.textAlign='left';ctx.fillText(`MODE ÉDITION : ${tool.toUpperCase()}`,20,Math.max(82,ch-70));}
+  }
+  function loop(ms){if(dirty||ms-last>40){render(ms);last=ms;dirty=false}requestAnimationFrame(loop)}
+  const canvasPos=e=>{const rect=canvas.getBoundingClientRect();return{x:e.clientX-rect.left,y:e.clientY-rect.top}};
+  canvas.addEventListener('pointerdown',e=>{const p=canvasPos(e);canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,p);drag={sx:p.x,sy:p.y,ox,oy,moved:false};});
+  canvas.addEventListener('pointermove',e=>{const p=canvasPos(e);if(pointers.has(e.pointerId)){const old=pointers.get(e.pointerId);pointers.set(e.pointerId,p);if(pointers.size===1&&drag){ox+=p.x-old.x;oy+=p.y-old.y;drag.moved ||= Math.hypot(p.x-drag.sx,p.y-drag.sy)>7;}
+    if(pointers.size===2){const points=Array.from(pointers.values()),dist=Math.hypot(points[0].x-points[1].x,points[0].y-points[1].y);if(drag.prevDist)zoom=Math.min(2.1,Math.max(.35,zoom*dist/drag.prevDist));drag.prevDist=dist;drag.moved=true;}
+  }else{hovered=screenToTile(p.x,p.y);if(!valid(hovered.r,hovered.c))hovered=null;}dirty=true;});
+  canvas.addEventListener('pointerup',e=>{const p=canvasPos(e);const wasMoved=drag?.moved;pointers.delete(e.pointerId);if(!pointers.size){if(!wasMoved){const hit=screenToTile(p.x,p.y);if(valid(hit.r,hit.c)){
+      if(tool!=='inspect' && !nodes.some(n=>n.r===hit.r&&n.c===hit.c)){tiles[hit.r][hit.c]=tool;selection.innerHTML=`<b>Parcelle ${hit.r}:${hit.c}</b><br>Revêtement : ${tool}. Cette modification est uniquement une démonstration locale.`;}
+      else{const n=nodes.find(n=>Math.abs(n.c-hit.c)<=1&&Math.abs(n.r-hit.r)<=1);focused=n||null;selection.innerHTML=n?`<b>${n.name}</b><br>${n.desc}<br>Case : ${n.r}:${n.c}`:`<b>Parcelle ${hit.r}:${hit.c}</b><br>Type : ${tiles[hit.r][hit.c]} · coordonnées modifiables indépendamment`;}
+  }}drag=null;}dirty=true;});
+  canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);drag=null;dirty=true;});
+  canvas.addEventListener('wheel',e=>{e.preventDefault();const p=canvasPos(e),oldZoom=zoom;zoom=Math.max(.35,Math.min(2.1,zoom*(e.deltaY>0?.9:1.1)));ox=p.x-(p.x-ox)*zoom/oldZoom;oy=p.y-(p.y-oy)*zoom/oldZoom;dirty=true;},{passive:false});
+  document.querySelectorAll('.tile').forEach(btn=>btn.addEventListener('click',()=>{tool=btn.dataset.tool;document.querySelectorAll('.tile').forEach(t=>t.classList.toggle('active',t===btn));dirty=true;}));
+  document.getElementById('gridBtn').addEventListener('click',()=>{grid=!grid;document.getElementById('gridBtn').textContent='Grille : '+(grid?'oui':'non');dirty=true;});
+  document.getElementById('resetBtn').addEventListener('click',()=>{tiles=base.map(row=>row.slice());focused=null;selection.textContent='Carte réinitialisée. Aucune sauvegarde Supabase effectuée.';resetCamera();});
+  function zoomAround(mult){const x=cw*.43,y=ch*.5,old=zoom;zoom=Math.min(2.1,Math.max(.35,zoom*mult));ox=x-(x-ox)*zoom/old;oy=y-(y-oy)*zoom/old;dirty=true;}
+  document.getElementById('zoomIn').onclick=()=>zoomAround(1.17);document.getElementById('zoomOut').onclick=()=>zoomAround(1/1.17);document.getElementById('home').onclick=resetCamera;
+  window.addEventListener('resize',setCanvas);setCanvas();requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

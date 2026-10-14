@@ -1,0 +1,66 @@
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -1,4 +1,6 @@
+ import {
++  lazy,
++  Suspense,
+   useEffect,
+   useState,
+ } from "react"
+@@ -59,6 +61,7 @@
+ import MissionsModal from "./components/MissionsModal"
+ import CommanderModal from "./components/CommanderModal"
+ import WorldMap from "./components/world/WorldMap"
++
+ import AuthScreen from "./components/auth/AuthScreen"
+ import NotificationCenter from "./components/game/NotificationCenter"
+ 
+@@ -111,6 +114,10 @@
+   | "city"
+   | "world"
+   | "editor"
++  | "modular-lab"
++
++// Chargement différé : le laboratoire modulaire n’alourdit pas la partie des joueurs.
++const ModularZoneLab = lazy(() => import("./components/world/ModularZoneLab"))
+ 
+ function getSafeRate(
+   value: unknown,
+@@ -383,6 +390,13 @@
+     setMode(
+       "world"
+     )
++  }
++
++  function openModularLab() {
++    // Le prototype s’ouvre uniquement avec le statut administrateur Supabase.
++    if (!data?.player?.is_admin) return
++    closeAllPanels()
++    setMode("modular-lab")
+   }
+ 
+   function openEditor() {
+@@ -1232,6 +1246,23 @@
+         />
+       )}
+ 
++      {mode === "world" && Boolean(data.player.is_admin) && (
++        <button
++          type="button"
++          onClick={openModularLab}
++          className="absolute bottom-[max(16px,env(safe-area-inset-bottom))] left-1/2 z-[9000] -translate-x-1/2 rounded-xl border border-amber-300/60 bg-zinc-950/95 px-4 py-3 text-xs font-black uppercase tracking-[0.08em] text-amber-100 shadow-[0_8px_24px_rgba(0,0,0,.7)] transition hover:bg-amber-900/70 sm:bottom-5 sm:left-5 sm:translate-x-0"
++          title="Tester une zone modulaire sans toucher à la vraie carte"
++        >
++          🧱 Tester la zone modulaire
++        </button>
++      )}
++
++      {mode === "modular-lab" && Boolean(data.player.is_admin) && (
++        <Suspense fallback={<div className="flex h-full items-center justify-center bg-[#0a1119] text-amber-100">Chargement du laboratoire modulaire…</div>}>
++          <ModularZoneLab onBack={openWorldMap} />
++        </Suspense>
++      )}
++
+       <NotificationCenter
+         notifications={gameNotifications}
+         open={notificationCenterOpen}
