@@ -1,30 +1,34 @@
-# Crime Empire V3 — Correctif écran noir du laboratoire
+# Crime Empire — Zone Modulaire Premium V05
 
-## Symptôme
-Le bouton « Tester la zone modulaire » s’ouvre, mais le décor/canvas reste noir. Notre précédent composant utilisait `iframe srcDoc` avec un script embarqué. Ce script peut être bloqué par la politique de sécurité (CSP) de Vercel ou par l’intégration dans l’iframe. Sans script, le canvas ne dessine rien.
+Cette version est **du code fonctionnel de laboratoire**, pas une image de démonstration.
 
-## Ce que change le patch
-- `src/components/world/ModularZoneLab.tsx` pointe maintenant vers une vraie page statique `/modular-zone-01/index.html?v=3` ; plus de HTML injecté en `srcDoc`.
-- `public/modular-zone-01/index.html` et `styles.css`, `lab.js` séparent la présentation et le JavaScript pour permettre le chargement externe.
-- `public/modular-zone-01/assets/` contient les textures du terrain et les deux sprites.
-- Un indicateur s’affiche : « ✅ Carte modulaire active » si le premier rendu a fonctionné ; une erreur explicite autrement.
-- `sandbox="allow-scripts"` conservé : la démo ne peut pas accéder au DOM parent, aux cookies et au localStorage Supabase du jeu.
+## Ce qui fonctionne
 
-## Installation sur GitHub (pas de local nécessaire)
-1. Sur GitHub, ouvre le même dépôt que Vercel et appuie sur `.` (github.dev).
-2. **Remplace seulement** `src/components/world/ModularZoneLab.tsx` par celui du ZIP.
-3. Copie **tout le dossier** `public/modular-zone-01/` du ZIP vers la racine `public` du dépôt, en respectant les chemins.
-4. Ne touche PAS à `App.tsx` ni à `WorldMap.tsx` : leur intégration précédente doit rester intacte.
-5. Fais Commit/Push sur une branche de test, puis vérifie le déploiement Vercel.
-6. Ouvre directement `https://TON-DOMAINE/modular-zone-01/index.html?v=3` : la carte doit être visible et l’outil « Grille » fonctionner.
-7. Connecte-toi en administrateur, clique sur « Tester la zone modulaire » ; la même carte doit s’afficher.
+- **Carte de 12 × 12 cases logiques**, en perspective isométrique ; chaque case est carrée dans la logique du terrain (diamant projeté à l'écran).
+- Fond continu, routes avec raccords, parcelles, asphalte, béton, végétation, bord d'eau animé légèrement.
+- **Villa 2 × 2 = quatre cases**, dépôt PvE 2 × 2 et autres bâtiments ajoutables : sécurité, garage, laboratoire, syndicat, planque et usine (3 × 3).
+- Décors sur 1 × 1 et portail 1 × 2 ; tous les visuels sont séparés du terrain.
+- Chaque sprite est calé sur un socle aux coins correspondant exactement à sa zone logique ; ombre de contact au pied du bâtiment.
+- Drag souris/doigt, zoom/pan, grille masquable, surbrillance des cases occupées, blocage sur route/eau ou collision.
+- Undo/redo, sauvegarde locale, export/import du JSON de la version V05, aperçu joueur.
 
-**IMPORTANT** : la route statique est publique, mais ne sert que des graphismes expérimentaux ; aucune session, donnée personnelle ou écriture Supabase n’y figure. Le bouton dans le jeu reste limité à l’administrateur.
+## Installation sur GitHub, sans utiliser l'ancien projet local
 
-## Si l’écran est toujours noir
-- Si tu lis « ⏳ Initialisation du terrain… » sans changement, examine dans la console réseau les requêtes `/modular-zone-01/lab.js`, `/modular-zone-01/styles.css` et `/modular-zone-01/assets/*.webp`, et les erreurs `Content Security Policy`.
-- Si tu lis « ❌ Initialisation impossible » ou « ❌ Erreur de rendu », copie ce message et l’erreur de console.
-- Si la page autonome fonctionne mais pas l’iframe, copie l’erreur de sécurité du navigateur : il faudra éventuellement ajuster la politique `frame-src`/`sandbox` du site.
-- En cas de 404 sous `/modular-zone-01/index.html`, vérifie que les fichiers sont réellement dans `public/` et non `src/`.
+1. Avant la modification, conserve une copie du commit V04 qui fonctionne (ou utilise une branche GitHub de test).
+2. Dans l'éditeur Web GitHub, **remplace le dossier `public/modular-zone-01/`** avec les trois fichiers et le dossier `assets` du ZIP. Conserve l'arborescence exacte.
+3. Commit les fichiers sur ta branche de test, puis déploie-les avec Vercel.
+4. Accède à l'adresse `https://TON-DOMAINE/modular-zone-01/` (ou via le bouton du laboratoire dans Crime Empire).
+5. Vérifie l'indicateur **« Carte Premium 12×12 active »**, déplace la Villa et regarde l'empreinte verte 2×2.
+6. Teste le bouton **Aperçu joueur** pour masquer l'éditeur et examiner la scène.
 
-Aucun SQL, aucune modification des combats PvE, sauvegardes ou positions joueurs.
+### Attention
+
+- **Ne remplace pas** `src/App.tsx` ou `src/components/world/WorldMap.tsx` ; ce ZIP ne contient aucun de ces fichiers.
+- **Aucun SQL** et **aucun impact sur Supabase**. Cette page indépendante ne modifie pas les vraies villes des joueurs.
+- **Les anciens brouillons V04 ne sont pas écrasés**. La région V05 est nouvelle (12×12 au lieu de 9×11), donc démarre avec sa propre sauvegarde locale. Tu peux exporter V05 sous forme JSON avant de changer de navigateur.
+- Cette carte est une base jouable à construire. Le raccord visuel des sprites 2,5D est amélioré par leurs socles, mais une correspondance parfaite d'angles et de fondations demanderait un travail supplémentaire sur les visuels sources.
+- Une fois la disposition validée, l'étape suivante sera la transposition du modèle et des coordonnées vers la véritable world map, puis vers Supabase si nécessaire. **Ce ZIP n'effectue pas cette migration.**
+
+## En cas de souci
+
+Sur l'URL du laboratoire, ouvre F12 → Console, puis tape `window.__CE_MODULAR_LAB__.getAssets()` : doit indiquer `ready: 15` et `failed: 0` après le chargement complet. Si un fichier manque, vérifie qu'il existe bien dans `public/modular-zone-01/assets/` sur GitHub.

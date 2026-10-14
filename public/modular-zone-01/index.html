@@ -1,64 +1,84 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>Crime Empire — Zone Modulaire 04</title>
-  <link rel="stylesheet" href="./styles.css">
+  <meta name="theme-color" content="#09151d">
+  <title>Crime Empire — Carte Modulaire Premium V05</title>
+  <link rel="stylesheet" href="./styles.css?v=5">
 </head>
 <body>
-  <canvas id="scene" aria-label="Laboratoire graphique. Déplacez les bâtiments, peignez le terrain et zoomez sur la carte."></canvas>
-  <div class="screen-tint" aria-hidden="true"></div>
-  <div id="scene-status" role="status" aria-live="polite" data-state="loading">⏳ Chargement du laboratoire V04…</div>
-  <header>
-    <div class="header-left">
-      <div class="brand"><div class="crest">CE</div><div><b>Crime Empire</b><small>World map · Zone modulaire 04</small></div></div>
-    </div>
-    <div class="tag">Région Sud · Laboratoire expérimental</div>
+  <canvas id="scene" aria-label="Carte modulaire interactive, sélectionnez et déplacez les bâtiments, dessinez les routes et les parcelles."></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <header class="topbar">
+    <div class="brand"><span class="crest">CE</span><div><b>CRIME EMPIRE</b><small>ATELIER DE CARTE • V05</small></div></div>
+    <div class="globaltag">RÉGION SUD <span>•</span> LABORATOIRE PREMIUM</div>
+    <div class="health" id="counts">12 × 12 cases</div>
+    <button id="previewExitBtn" hidden>← Retour à l’éditeur</button>
   </header>
-  <aside class="sidebar" aria-label="Outils du laboratoire">
-    <div class="eyebrow">Prototype graphique indépendant</div>
-    <h2>Éditeur modulaire V04</h2>
-    <p>Villa 2×2 (4 cases), dépôt PvE 3×3 et décorations indépendantes. Glisse un bâtiment : la grille aimante ses cases. Les emplacements interdits sont affichés en rouge.</p>
-    <div class="caption">Manipulation</div>
-    <div class="tiles" id="tools">
-      <button class="tile active" data-tool="move" aria-pressed="true">✥ &nbsp;Déplacer bâtiments</button>
-      <button class="tile" data-tool="inspect" aria-pressed="false">⌖ &nbsp;Inspecter</button>
-      <button class="tile" data-tool="road" aria-pressed="false">═ &nbsp;Route</button>
-      <button class="tile" data-tool="plot" aria-pressed="false">◇ &nbsp;Parcelle</button>
-      <button class="tile" data-tool="asphalt" aria-pressed="false">▰ &nbsp;Asphalte</button>
-      <button class="tile" data-tool="concrete" aria-pressed="false">▧ &nbsp;Béton</button>
-      <button class="tile" data-tool="grass" aria-pressed="false">♣ &nbsp;Terrain</button>
-      <button class="tile" data-tool="water" aria-pressed="false">≈ &nbsp;Eau</button>
+  <div id="scene-status" role="status" aria-live="polite" data-state="loading">Chargement des nouvelles textures…</div>
+  <aside class="sidebar">
+    <div class="headline"><div><div class="eyebrow">ÉDITEUR VISUEL INDÉPENDANT</div><h1>Construis ta région</h1></div><span class="vbadge">V05</span></div>
+    <p class="intro">Un vrai terrain carré, des routes raccordées et des bâtiments ancrés à leurs parcelles. La Villa occupe exactement <b>2×2 cases</b>.</p>
+    <div class="sectionlabel">1. Déplacer et modifier</div>
+    <div class="tools">
+      <button data-tool="move" class="active" aria-pressed="true">✥ Déplacer</button>
+      <button data-tool="inspect" aria-pressed="false">⌕ Inspecter</button>
     </div>
-    <div class="caption">Ajouter un décor</div>
-    <div class="tiles tiles-add">
-      <button class="tile" data-add="jardin">🌴 Jardin · 1×1</button>
-      <button class="tile" data-add="ilot">🌿 Îlot · 1×1</button>
-      <button class="tile" data-add="portail">🚧 Portail · 1×2</button>
+    <div class="sectionlabel">2. Construire le terrain</div>
+    <div class="tools ground-tools">
+      <button data-tool="road">▰ Route</button>
+      <button data-tool="plot">▧ Parcelle</button>
+      <button data-tool="asphalt">◩ Asphalte</button>
+      <button data-tool="concrete">▦ Béton</button>
+      <button data-tool="grass">♣ Jardin</button>
+      <button data-tool="water">≈ Eau</button>
     </div>
-    <div class="caption">Objet sélectionné</div>
-    <div class="selection" id="selection" aria-live="polite">Clique sur un bâtiment ou une décoration, puis glisse-le sur la grille.</div>
-    <div class="inspector" id="inspector" hidden>
-      <div class="footprint-data"><strong>Emprise au sol</strong><output id="footprintOutput">2 × 2 · 4 cases</output><output id="placementOutput" data-valid="true">✓ Placement valide</output></div>
-      <label class="control-label" for="sizeRange"><span>Échelle du visuel</span><output id="sizeOutput">100 %</output></label>
-      <input id="sizeRange" type="range" min="65" max="105" step="1" value="100">
-      <label class="control-label" for="depthRange"><span>Ordre d'affichage</span><output id="depthOutput">0</output></label>
-      <input id="depthRange" type="range" min="-3" max="3" step="1" value="0">
-      <div class="nudge-area"><span class="small-label">Déplacement précis</span><div class="nudge-pad"><button class="nudge" data-nudge="-1,0" title="Case vers le haut">↑</button><div><button class="nudge" data-nudge="0,-1" title="Case vers la gauche">←</button><button class="nudge" data-nudge="1,0" title="Case vers le bas">↓</button><button class="nudge" data-nudge="0,1" title="Case vers la droite">→</button></div></div></div>
-      <div class="btnrow"><button class="btn ghost" id="resetNodeBtn">Position d’origine</button><button class="btn reset" id="removeNodeBtn" hidden>Supprimer décor</button></div>
+    <div class="sectionlabel">3. Ajouter un bâtiment</div>
+    <div class="tools add-tools">
+      <button data-add="villa">◆ Villa 2×2</button>
+      <button data-add="depot">⬡ Dépôt PvE 2×2</button>
+      <button data-add="garage">▣ Garage 2×2</button>
+      <button data-add="securite">▣ Sécurité 2×2</button>
+      <button data-add="syndicat">▣ Syndicat 2×2</button>
+      <button data-add="labo">◇ Laboratoire 2×2</button>
+      <button data-add="planque">▣ Planque 2×2</button>
+      <button data-add="usine">▤ Usine 3×3</button>
     </div>
-    <div class="caption">Options et sauvegarde</div>
-    <div class="btnrow"><span class="snap-locked">✓ Snap grille : toujours actif</span><button class="btn ghost" id="gridBtn" aria-pressed="false">Grille : non</button></div>
-    <div class="btnrow"><button class="btn ghost" id="exportBtn">↓ Exporter JSON</button><button class="btn ghost" id="importBtn">↑ Importer JSON</button></div>
-    <div class="btnrow"><button class="btn reset" id="resetBtn">Réinitialiser tout</button></div>
-    <input id="importInput" type="file" accept="application/json,.json" hidden>
-    <div class="status"><span class="pulse"></span>Test privé dans ce navigateur uniquement<br>Aucune modification Supabase</div>
+    <div class="sectionlabel">4. Décoration</div>
+    <div class="tools add-tools">
+      <button data-add="jardin">🌴 Jardin 1×1</button>
+      <button data-add="ilot">🌿 Îlot 1×1</button>
+      <button data-add="portail">⚜ Portail 1×2</button>
+    </div>
+    <div class="sectionlabel">Objet sélectionné</div>
+    <div id="selection" class="selection" aria-live="polite"></div>
+    <div id="inspector" class="inspector" hidden>
+      <div class="footprint"><strong>EMPRISE EXACTE</strong><output id="footprintOutput">2 × 2 — 4 cases</output><output id="placementOutput" data-valid="true">✓ Placement valide</output></div>
+      <label class="rangebar" for="sizeRange"><span>Calibrage visuel ±8 %</span><output id="sizeOutput">100%</output></label>
+      <input id="sizeRange" type="range" min="85" max="108" value="100" step="1">
+      <div class="nudge"><span>Déplacement d’une case</span><div>
+        <button data-nudge="0,-1" title="Colonne précédente">←</button>
+        <button data-nudge="-1,0" title="Ligne précédente">↑</button>
+        <button data-nudge="1,0" title="Ligne suivante">↓</button>
+        <button data-nudge="0,1" title="Colonne suivante">→</button>
+      </div></div>
+      <button id="removeNodeBtn" class="danger">Supprimer cet objet</button>
+    </div>
+    <div class="sectionlabel">Voir le rendu final</div>
+    <div class="tools"><button id="previewBtn">◈ Aperçu joueur</button><button id="fitVilla">◎ Centrer Villa</button></div>
+    <div class="sectionlabel">Affichage / édition</div>
+    <div class="tools"><button id="gridBtn">Grille : masquée</button><button id="labelsBtn">Noms : visibles</button></div>
+    <div class="tools"><button id="undoBtn">↶ Annuler</button><button id="redoBtn">↷ Refaire</button></div>
+    <div class="tools"><button id="exportBtn">↓ Export JSON</button><button id="importBtn">↑ Import JSON</button></div>
+    <div class="tools"><button id="resetBtn" class="danger">Réinitialiser la carte</button></div>
+    <input type="file" accept="application/json,.json" id="importInput" hidden>
+    <p class="privacy">✓ Sauvegarde automatique dans ce navigateur · Aucune écriture Supabase</p>
   </aside>
-  <div class="bottom">
-    <div class="hint"><strong>Objets :</strong> sélectionne et glisse · <strong>Sol :</strong> outil + clic · <strong>Caméra :</strong> glisse dans le vide / pince / molette</div>
-    <div class="controls"><button aria-label="Dézoomer" id="zoomOut">−</button><button aria-label="Recentrer" id="home">⌂</button><button aria-label="Zoomer" id="zoomIn">+</button></div>
+  <div class="hudbottom">
+    <div class="hint"><span class="dot"></span><span><b>Déplacer :</b> attrape et glisse · <b>Construire :</b> peins les cases · <b>Vue :</b> pince / molette</span></div>
+    <div class="zoom"><span id="zoomLabel">50%</span><button id="zoomOut" aria-label="Dézoomer">−</button><button id="home" aria-label="Vue générale">⌂</button><button id="zoomIn" aria-label="Zoomer">+</button></div>
   </div>
-  <script defer src="./lab.js"></script>
+  <script defer src="./lab.js?v=5"></script>
 </body>
 </html>
