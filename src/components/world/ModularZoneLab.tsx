@@ -1,42 +1,14 @@
-import { useMemo } from "react"
-
-// Démonstration HTML/Canvas 2D confinée dans une iframe isolée.
-// Le code et les textures sont fournis par Vite, sans route publique dédiée.
-import prototypeHtml from "../../modular-zone-01/index.html?raw"
-import asphaltUrl from "../../modular-zone-01/assets/asphalt.webp?url"
-import concreteUrl from "../../modular-zone-01/assets/concrete.webp?url"
-import grassUrl from "../../modular-zone-01/assets/grass.webp?url"
-import waterUrl from "../../modular-zone-01/assets/water.webp?url"
-import villaUrl from "../../modular-zone-01/assets/ville.webp?url"
-import depotUrl from "../../modular-zone-01/assets/depot.webp?url"
-
+// Le prototype est servi comme une page statique Vite/Vercel.
+// Contrairement à srcDoc, il ne dépend pas de scripts inline bloqués par la CSP.
+// Le sandbox sépare les données du jeu de cette démo purement graphique.
 type Props = { onBack: () => void }
 
-const spriteUrls: Record<string, string> = {
-  "asphalt.webp": asphaltUrl,
-  "concrete.webp": concreteUrl,
-  "grass.webp": grassUrl,
-  "water.webp": waterUrl,
-  "ville.webp": villaUrl,
-  "depot.webp": depotUrl,
-}
-
 export default function ModularZoneLab({ onBack }: Props) {
-  const document = useMemo(() => {
-    let result = prototypeHtml
-    for (const [filename, url] of Object.entries(spriteUrls)) {
-      // Les chemins sont intégrés à l'HTML avant l'exécution du script du prototype.
-      result = result.replaceAll(`assets/${filename}`, url)
-    }
-    return result
-  }, [])
-
   return (
     <section className="absolute inset-0 z-[9100] bg-[#0a1119]">
       <iframe
         title="Crime Empire — Laboratoire de carte modulaire 01"
-        srcDoc={document}
-        // Aucun accès au DOM du jeu, au stockage, ni aux sessions Supabase.
+        src="/modular-zone-01/index.html?v=3"
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         className="absolute inset-0 h-full w-full border-0"
