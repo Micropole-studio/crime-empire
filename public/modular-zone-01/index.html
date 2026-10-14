@@ -9,17 +9,17 @@
 <body>
   <canvas id="scene" aria-label="Laboratoire graphique. Déplacez les bâtiments, peignez le terrain et zoomez sur la carte."></canvas>
   <div class="screen-tint" aria-hidden="true"></div>
-  <div id="scene-status" role="status" aria-live="polite" data-state="loading">⏳ Chargement du laboratoire V02…</div>
+  <div id="scene-status" role="status" aria-live="polite" data-state="loading">⏳ Chargement du laboratoire V03…</div>
   <header>
     <div class="header-left">
-      <div class="brand"><div class="crest">CE</div><div><b>Crime Empire</b><small>World map · Zone modulaire 02</small></div></div>
+      <div class="brand"><div class="crest">CE</div><div><b>Crime Empire</b><small>World map · Zone modulaire 03</small></div></div>
     </div>
     <div class="tag">Région Sud · Laboratoire expérimental</div>
   </header>
   <aside class="sidebar" aria-label="Outils du laboratoire">
     <div class="eyebrow">Prototype graphique indépendant</div>
-    <h2>Éditeur modulaire V02</h2>
-    <p>Déplace les bâtiments, règle leur taille et leur ancrage au sol. Peins ensuite les cases sous les bâtiments.</p>
+    <h2>Éditeur modulaire V03</h2>
+    <p>Villa 4×4, dépôt PvE 3×3. Glisse un bâtiment : la grille aimante ses cases. Les emplacements interdits sont affichés en rouge.</p>
     <div class="caption">Manipulation</div>
     <div class="tiles" id="tools">
       <button class="tile active" data-tool="move" aria-pressed="true">✥ &nbsp;Déplacer bâtiments</button>
@@ -34,21 +34,20 @@
     <div class="caption">Bâtiment sélectionné</div>
     <div class="selection" id="selection" aria-live="polite">Clique sur la Villa ou le dépôt PvE, puis fais glisser le bâtiment.</div>
     <div class="inspector" id="inspector" hidden>
-      <label class="control-label" for="sizeRange"><span>Largeur</span><output id="sizeOutput">330 px</output></label>
-      <input id="sizeRange" type="range" min="180" max="510" step="10" value="330">
-      <label class="control-label" for="rotationRange"><span>Inclinaison visuelle</span><output id="rotationOutput">0°</output></label>
-      <input id="rotationRange" type="range" min="-18" max="18" step="1" value="0">
+      <div class="footprint-data"><strong>Emprise au sol</strong><output id="footprintOutput">4 × 4 · 16 cases</output><output id="placementOutput" data-valid="true">✓ Placement valide</output></div>
+      <label class="control-label" for="sizeRange"><span>Échelle du visuel</span><output id="sizeOutput">100 %</output></label>
+      <input id="sizeRange" type="range" min="65" max="105" step="1" value="100">
       <label class="control-label" for="depthRange"><span>Ordre d'affichage</span><output id="depthOutput">0</output></label>
       <input id="depthRange" type="range" min="-3" max="3" step="1" value="0">
       <div class="nudge-area"><span class="small-label">Déplacement précis</span><div class="nudge-pad"><button class="nudge" data-nudge="-1,0" title="Case vers le haut">↑</button><div><button class="nudge" data-nudge="0,-1" title="Case vers la gauche">←</button><button class="nudge" data-nudge="1,0" title="Case vers le bas">↓</button><button class="nudge" data-nudge="0,1" title="Case vers la droite">→</button></div></div></div>
       <div class="btnrow"><button class="btn ghost" id="resetNodeBtn">Replacer ce bâtiment</button></div>
     </div>
     <div class="caption">Options et sauvegarde</div>
-    <div class="btnrow"><button class="btn ghost" id="snapBtn" aria-pressed="true">Aimantation : oui</button><button class="btn ghost" id="gridBtn" aria-pressed="false">Grille : non</button></div>
+    <div class="btnrow"><span class="snap-locked">✓ Snap grille : toujours actif</span><button class="btn ghost" id="gridBtn" aria-pressed="false">Grille : non</button></div>
     <div class="btnrow"><button class="btn ghost" id="exportBtn">↓ Exporter JSON</button><button class="btn ghost" id="importBtn">↑ Importer JSON</button></div>
     <div class="btnrow"><button class="btn reset" id="resetBtn">Réinitialiser tout</button></div>
     <input id="importInput" type="file" accept="application/json,.json" hidden>
-    <div class="status"><span class="pulse"></span>Stockage dans ce navigateur uniquement<br>Aucune modification Supabase</div>
+    <div class="status"><span class="pulse"></span>Test privé dans ce navigateur uniquement<br>Aucune modification Supabase</div>
   </aside>
   <div class="bottom">
     <div class="hint"><strong>Bâtiments :</strong> clique et glisse · <strong>Sol :</strong> outil + clic · <strong>Caméra :</strong> glisse dans le vide / pince / molette</div>
