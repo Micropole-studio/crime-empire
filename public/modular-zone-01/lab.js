@@ -1,4 +1,4 @@
-/* Crime Empire / WORLD MAP MODULAIRE V06 — laboratoire PvE/PvP indépendant de Supabase. */
+/* Crime Empire / WORLD MAP PREMIUM RÉALISTE V07 — laboratoire PvE/PvP indépendant de Supabase. */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -6,15 +6,16 @@
   const stat = $('scene-status'), selection = $('selection');
   if (!ctx) { if (stat) stat.textContent = 'Canvas 2D indisponible'; return; }
   const ROWS=14, COLS=14, TW=208, TH=106;
+  // Compatibilité : réutiliser les positions que l'administrateur a enregistrées en V06.
   const KEY='crime-empire-world-map-v06-lab';
   const KINDS = new Set(['road','plot','asphalt','concrete','grass','water','quay']);
   // WORLD MAP ONLY: a city is one world-map marker, not its internal buildings.
   const DEFINITIONS={
-    city:{name:'Ville joueur',rows:2,cols:2,category:'city',art:'city',scale:.95,lift:7,pad:'luxury'},
-    blackmarket:{name:'Marché noir',rows:2,cols:2,category:'pve',art:'blackmarket',scale:.96,lift:5,pad:'industrial'},
-    prison:{name:'Prison régionale',rows:3,cols:3,category:'pve',art:'prison',scale:.90,lift:6,pad:'industrial'},
-    port:{name:'Port sombre',rows:3,cols:3,category:'pve',art:'port',scale:.93,lift:4,pad:'harbor'},
-    weapons:{name:'Dépôt d’armes',rows:2,cols:2,category:'pve',art:'weapons',scale:.94,lift:5,pad:'industrial'},
+    city:{name:'Ville joueur',rows:2,cols:2,category:'city',art:'city',scale:.95,lift:2,pad:'luxury'},
+    blackmarket:{name:'Marché noir',rows:2,cols:2,category:'pve',art:'blackmarket',scale:.93,lift:2,pad:'industrial'},
+    prison:{name:'Prison régionale',rows:3,cols:3,category:'pve',art:'prison',scale:.91,lift:2,pad:'industrial'},
+    port:{name:'Port sombre',rows:3,cols:3,category:'pve',art:'port',scale:.91,lift:2,pad:'harbor'},
+    weapons:{name:'Dépôt d’armes',rows:2,cols:2,category:'pve',art:'weapons',scale:.93,lift:2,pad:'industrial'},
     jardin:{name:'Bosquet',rows:1,cols:1,category:'decor',art:'jardin',scale:.75,lift:2,pad:'garden'},
     ilot:{name:'Place paysagée',rows:1,cols:1,category:'decor',art:'ilot',scale:.81,lift:2,pad:'garden'},
     portail:{name:'Point de contrôle',rows:1,cols:2,category:'decor',art:'portail',scale:.85,lift:2,pad:'luxury'}
@@ -55,7 +56,7 @@
       {id:'depot-armes',src:'weapons',r:9,c:8,scale:100},
       {id:'port-sombre',src:'port',r:9,c:10,scale:100},
     ];
-    return {version:6,tiles,nodes};
+    return {version:7,tiles,nodes};
   }
   let data=initialMap();
   function check(node,r=node.r,c=node.c){
@@ -84,13 +85,13 @@
       if(nodes.some(o=>occupied(o).some(([a,b])=>cells.some(([c,e])=>c===a&&e===b))))throw Error('Deux bâtiments se chevauchent');
       nodes.push(obj);
     }
-    return {version:6,tiles,nodes};
+    return {version:7,tiles,nodes};
   }
   try{
     const raw=localStorage.getItem(KEY);
     if(raw)data=sanitise(JSON.parse(raw));
 
-  }catch(err){console.warn('[World V06] état ignoré:',err);}
+  }catch(err){console.warn('[World V07] état ignoré:',err);}
   function inform(message,level='ready'){if(stat){stat.textContent=message;stat.dataset.state=level;}}
   function save(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify(data));}catch(e){inform('Stockage local indisponible','warning');}},190);}
   function snapshot(){history.push(JSON.stringify(data));if(history.length>40)history.shift();future=[];}
@@ -125,6 +126,27 @@
       ctx.strokeStyle='#e9c38720';ctx.lineWidth=1;
       ctx.beginPath();ctx.moveTo(p.x-TW/2,p.y);ctx.lineTo(p.x+TW/2,p.y);ctx.stroke();
     }
+
+    // Raccords V07 : joints de béton, bordures chanfreinées et délimitations de quai.
+    if(t==='concrete'||t==='plot'||t==='quay'){
+      ctx.save();ctx.strokeStyle=t==='quay'?'#e4c78a8b':'#eadfc127';ctx.lineWidth=t==='quay'?2.5:.9;
+      ctx.beginPath();ctx.moveTo(p.x-TW*.37,p.y-TH*.04);ctx.lineTo(p.x+TW*.23,p.y+TH*.20);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(p.x+TW*.15,p.y-TH*.24);ctx.lineTo(p.x-TW*.12,p.y+TH*.18);ctx.stroke();ctx.restore();
+    }
+    if(t==='quay'){
+      const rng=scatter(7199+(r+1)*371+(c+1)*83);
+      for(let j=0;j<5;j++){
+        const x=p.x+(rng()-.5)*TW*.75,y=p.y+(rng()-.5)*TH*.44;
+        ctx.fillStyle='#d5af6688';ctx.fillRect(x,y,3.2,2.5);
+      }
+    }
+    if(t==='asphalt'){
+      const rng=scatter(3293+(r+1)*911+(c+1)*211);
+      for(let j=0;j<8;j++){
+        const x=p.x+(rng()-.5)*TW*.75,y=p.y+(rng()-.5)*TH*.6;
+        ctx.fillStyle='#171f2444';ctx.fillRect(x,y,rng()*11+4,rng()*1.3+.5);
+      }
+    }
     if(t==='road'){
       // Roads only draw the center line toward neighbouring roads; no disconnected dashed curves.
       ctx.save();ctx.setLineDash([11,12]);ctx.strokeStyle='#e2c3837f';ctx.lineWidth=2.3;
@@ -147,6 +169,15 @@
       for(let i=0;i<8;i++){const xx=p.x-80+i*23+Math.sin(ms*.0008+i*2)*4,yy=p.y-30+i*8;ctx.strokeStyle=i%2?'#62badf45':'#d0d6bb54';ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(xx,yy);ctx.quadraticCurveTo(xx+14,yy-4,xx+22,yy);ctx.stroke();}
     }
     ctx.restore();
+    if(t==='quay'){
+      // Bord de quai sur une vraie frontière eau/quai (aucune ligne sur les côtés intérieurs).
+      const neighbors=[[1,0],[-1,0],[0,1],[0,-1]];
+      for(const [dr,dc] of neighbors){const nr=r+dr,nc=c+dc;
+        if(valid(nr,nc)&&data.tiles[nr][nc]!=='water')continue;
+        const edge=dr===1?[{x:p.x,y:p.y+TH/2},{x:p.x-TW/2,y:p.y}]:dr===-1?[{x:p.x,y:p.y-TH/2},{x:p.x+TW/2,y:p.y}]:dc===1?[{x:p.x+TW/2,y:p.y},{x:p.x,y:p.y+TH/2}]:[{x:p.x-TW/2,y:p.y},{x:p.x,y:p.y-TH/2}];
+        ctx.strokeStyle='#dfc398aa';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(edge[0].x,edge[0].y);ctx.lineTo(edge[1].x,edge[1].y);ctx.stroke();
+      }
+    }
     if(t==='road'){
       ctx.strokeStyle='#a8997a44';ctx.lineWidth=1.7;diamond(p.x,p.y);ctx.stroke();
     }
@@ -167,11 +198,11 @@
     // Real footprint grid: exactly one foundation for N×M contiguous square tiles.
     for(const [r,c] of occupied(node)){
       const p=iso(r,c);
-      ctx.strokeStyle='#e4d8b42d';ctx.lineWidth=1;diamond(p.x,p.y);ctx.stroke();
+      if(showGrid||node.id===selected){ctx.strokeStyle='#e4d8b43d';ctx.lineWidth=1;diamond(p.x,p.y);ctx.stroke();}
       if(node.id===selected){ctx.fillStyle=check(node).ok?'#5cf6b43d':'#ff5c5c58';ctx.fill();ctx.strokeStyle=check(node).ok?'#a4efc3ab':'#f28b88ca';ctx.lineWidth=1.8;ctx.stroke();}
     }
   }
-  function softShadow(g){ctx.save();ctx.beginPath();ctx.ellipse(g.center.x,g.center.y+g.height*.18,g.width*.38,g.height*.19,0,0,Math.PI*2);ctx.fillStyle='#04090b63';ctx.fill();ctx.beginPath();ctx.ellipse(g.center.x,g.center.y+g.height*.13,g.width*.29,g.height*.12,0,0,Math.PI*2);ctx.fillStyle='#02040670';ctx.fill();ctx.restore();}
+  function softShadow(g){ctx.save();ctx.beginPath();ctx.ellipse(g.center.x,g.center.y+g.height*.17,g.width*.47,g.height*.24,0,0,Math.PI*2);ctx.fillStyle='#04090b35';ctx.fill();ctx.beginPath();ctx.ellipse(g.center.x,g.center.y+g.height*.13,g.width*.39,g.height*.16,0,0,Math.PI*2);ctx.fillStyle='#02040696';ctx.fill();ctx.restore();}
   function sprite(node){
     const g=geo(node),d=DEFINITIONS[node.src],im=imgs[node.src];
     softShadow(g);
@@ -290,7 +321,7 @@
     snapshot();[node.r,node.c]=location;data.nodes.push(node);selected=node.id;updateSelection();save();changed=true;setTool('move');inform('✓ '+d.name+' ajouté · glisse-le sur la carte');
   }
   function nudge(dr,dc){const n=data.nodes.find(n=>n.id===selected);if(!n)return;const d=DEFINITIONS[n.src],r=clamp(n.r+dr,0,ROWS-d.rows),c=clamp(n.c+dc,0,COLS-d.cols);const v=check(n,r,c);if(!v.ok){inform('⛔ '+v.msg,'warning');return;}snapshot();n.r=r;n.c=c;save();updateSelection();}
-  function exportJSON(){const blob=new Blob([JSON.stringify({...data,footprints:Object.fromEntries(Object.entries(DEFINITIONS).map(([k,d])=>[k,[d.rows,d.cols]]))},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='crime-empire-world-map-v06.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3500);}
+  function exportJSON(){const blob=new Blob([JSON.stringify({...data,footprints:Object.fromEntries(Object.entries(DEFINITIONS).map(([k,d])=>[k,[d.rows,d.cols]]))},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='crime-empire-world-map-v07.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3500);}
   async function importJSON(file){if(!file)return;try{if(file.size>400000)throw Error('Fichier trop lourd');const next=sanitise(JSON.parse(await file.text()));snapshot();data=next;selected='ville-joueur-1';save();updateSelection();changed=true;inform('✓ Plan importé dans le laboratoire');}catch(e){inform('Import refusé : '+(e?.message||String(e)),'error');}}
   loadImages();resize();
   canvas.addEventListener('pointerdown',down);canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerup',up);canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);gesture=null;changed=true;});canvas.addEventListener('lostpointercapture',e=>{pointers.delete(e.pointerId);if(!pointers.size)gesture=null;});
@@ -314,7 +345,7 @@
     const moves={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]};if(moves[e.key]){e.preventDefault();nudge(...moves[e.key]);}
   });
   window.addEventListener('resize',resize);window.addEventListener('visibilitychange',()=>{changed=true;});
-  updateSelection();setTool('move');inform('✓ Laboratoire WORLD MAP V06 · 6 lieux en place · Snap actif');
+  updateSelection();setTool('move');inform('✓ WORLD MAP V07 • terrain enrichi • PvE réaliste • déplacements conservés');
   raf=requestAnimationFrame(tick);
   // Small test/diagnostic interface to verify Vercel production without special devtools.
   window.__CE_MODULAR_LAB__={getState:()=>clone(data),getSelected:()=>selected,getAssets:()=>({ready,failed}),check:(id,r,c)=>{const n=data.nodes.find(o=>o.id===id);return n?check(n,r,c):null;},add};
