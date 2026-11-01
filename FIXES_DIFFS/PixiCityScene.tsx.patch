@@ -1,0 +1,89 @@
+--- PixiCityScene.tsx (avant)
++++ PixiCityScene.tsx (corrigé)
+@@ -100,6 +100,7 @@
+     let disposed = false
+     let app: Application | null = null
+     let initialized = false
++    let destroyed = false
+     let model: Container | null = null
+     let background: Sprite | null = null
+     let environmentalLights: Container | null = null
+@@ -113,6 +114,22 @@
+         const wave = (Math.sin(time * 2.4 + glow.phase) + 1) / 2
+         glow.graphic.alpha =
+           glow.minimum + (glow.maximum - glow.minimum) * wave
++      }
++    }
++
++    // Ne jamais détruire PixiJS deux fois : les chargements asynchrones
++    // peuvent se terminer après le démontage du composant React.
++    const disposePixi = () => {
++      if (destroyed || !initialized || !app) return
++      destroyed = true
++      const instance = app
++      app = null
++      initialized = false
++      try {
++        instance.ticker.remove(animate)
++        instance.destroy(true, { children: true })
++      } catch (error) {
++        console.warn("Crime Empire : arrêt PixiJS incomplet", error)
+       }
+     }
+ 
+@@ -263,7 +280,7 @@
+         })
+         initialized = true
+         if (disposed) {
+-          instance.destroy(true, { children: true })
++          disposePixi()
+           return
+         }
+ 
+@@ -277,7 +294,7 @@
+         // pas d'écran noir et pas de sauvegarde touchée.
+         const allTextures = await Promise.all(urls.map(async (url) => await Assets.load(url) as Texture))
+         if (disposed) {
+-          instance.destroy(true, { children: true })
++          disposePixi()
+           return
+         }
+         urls.forEach((url, index) => { textures[url] = allTextures[index] })
+@@ -296,16 +313,12 @@
+         instance.ticker.add(animate)
+         onReady(true)
+       } catch (error) {
+-        console.warn("Crime Empire : PixiJS indisponible, retour à l'affichage classique.", error)
+         if (!disposed) {
++          console.warn("Crime Empire : PixiJS indisponible, retour à l'affichage classique.", error)
+           onReady(false)
+           onUnavailable(true)
+         }
+-        if (app && initialized) {
+-          try { app.destroy(true, { children: true }) } catch { /* contexte WebGL inachevé */ }
+-          app = null
+-          initialized = false
+-        }
++        disposePixi()
+       }
+     }
+ 
+@@ -314,15 +327,9 @@
+     return () => {
+       disposed = true
+       redrawRef.current = () => undefined
+-      onReady(false)
+-      if (app && initialized) {
+-        try {
+-          app.ticker.remove(animate)
+-          app.destroy(true, { children: true })
+-        } catch { /* navigateur en fermeture */ }
+-      }
+-      app = null
+-      initialized = false
++      // Si init() est encore en cours, le async start() nettoiera l'instance
++      // une fois l'initialisation terminée. Sinon nettoyage immédiat.
++      disposePixi()
+     }
+   }, [onReady, onUnavailable])
+ 

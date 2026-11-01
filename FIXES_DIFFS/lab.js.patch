@@ -1,0 +1,49 @@
+--- lab.js (avant)
++++ lab.js (corrigé)
+@@ -87,13 +87,42 @@
+     }
+     return {version:7,tiles,nodes};
+   }
++  // Dans l'iframe sandboxée, localStorage est inaccessible par conception.
++  // La sauvegarde est déléguée au parent React, avec contrôle event.source.
++  let localStorageAllowed = false;
+   try{
+-    const raw=localStorage.getItem(KEY);
++    const raw=window.localStorage.getItem(KEY);
++    localStorageAllowed=true;
+     if(raw)data=sanitise(JSON.parse(raw));
+-
+-  }catch(err){console.warn('[World V07] état ignoré:',err);}
++  }catch(err){
++    if(err?.name!=='SecurityError')console.warn('[World V07] sauvegarde locale illisible:',err);
++  }
++  let bridgeLoaded = localStorageAllowed;
++  if(!localStorageAllowed && window.parent!==window){
++    window.addEventListener('message',e=>{
++      if(e.source!==window.parent || !e.data || e.data.type!=='crime-empire:lab:loaded')return;
++      bridgeLoaded=true;
++      const raw=e.data.payload;
++      if(typeof raw==='string' && raw.length<250000){
++        try{data=sanitise(JSON.parse(raw));selected=null;updateSelection();changed=true;inform('✓ Région restaurée depuis le jeu');}
++        catch(err){inform('Plan précédent invalide — carte par défaut conservée','warning');}
++      }
++    });
++    window.parent.postMessage({type:'crime-empire:lab:load'},'*');
++  }
+   function inform(message,level='ready'){if(stat){stat.textContent=message;stat.dataset.state=level;}}
+-  function save(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify(data));}catch(e){inform('Stockage local indisponible','warning');}},190);}
++  function save(){
++    clearTimeout(saveTimer);
++    saveTimer=setTimeout(()=>{
++      const raw=JSON.stringify(data);
++      if(localStorageAllowed){
++        try{window.localStorage.setItem(KEY,raw);return;}catch(e){inform('Stockage local indisponible — exporte ton JSON','warning');}
++      }
++      if(window.parent!==window && bridgeLoaded){
++        window.parent.postMessage({type:'crime-empire:lab:save',payload:raw},'*');
++      }
++    },190);
++  }
+   function snapshot(){history.push(JSON.stringify(data));if(history.length>40)history.shift();future=[];}
+   function restore(pile,other){if(!pile.length)return;other.push(JSON.stringify(data));data=sanitise(JSON.parse(pile.pop()));selected=null;updateSelection();save();changed=true;}
+   function loadImages(){

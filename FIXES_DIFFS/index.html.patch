@@ -1,0 +1,19 @@
+--- index.html (avant)
++++ index.html (corrigé)
+@@ -5,7 +5,7 @@
+   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+   <meta name="theme-color" content="#09151d">
+   <title>Crime Empire — World Map Premium Réaliste V07</title>
+-  <link rel="stylesheet" href="./styles.css?v=7">
++  <link rel="stylesheet" href="./styles.css?v=8">
+ </head>
+ <body>
+   <canvas id="scene" aria-label="Carte du monde modulaire PvE PvP interactive, déplacez des villes et points d’intérêt, dessinez routes et quais."></canvas>
+@@ -75,6 +75,6 @@
+     <div class="hint"><span class="dot"></span><span><b>Déplacer :</b> attrape et glisse · <b>Construire :</b> peins les cases · <b>Vue :</b> pince / molette</span></div>
+     <div class="zoom"><span id="zoomLabel">50%</span><button id="zoomOut" aria-label="Dézoomer">−</button><button id="home" aria-label="Vue générale">⌂</button><button id="zoomIn" aria-label="Zoomer">+</button></div>
+   </div>
+-  <script defer src="./lab.js?v=7"></script>
++  <script defer src="./lab.js?v=8"></script>
+ </body>
+ </html>
