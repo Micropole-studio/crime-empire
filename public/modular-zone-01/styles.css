@@ -23,3 +23,6 @@ button{font:inherit;cursor:pointer;touch-action:manipulation}button:hover{border
 body.preview-mode .sidebar,body.preview-mode .hudbottom,body.preview-mode #scene-status{display:none}
 body.preview-mode .topbar .health,body.preview-mode .globaltag{display:none}
 @media(max-width:930px){#previewExitBtn{font-size:10px;padding:7px}}
+
+/* V10: territoire continu, plus de bordure de plateau. */
+body{background:#23392f}body .vignette{background:radial-gradient(ellipse at 42% 50%,transparent 43%,#07150c46 100%)}.topbar{background:linear-gradient(#07140deb,#07140d80,transparent)}.sidebar{background:linear-gradient(160deg,#15241cf2,#07150eea)}.hudbottom .hint{background:#0d1f17e8}
