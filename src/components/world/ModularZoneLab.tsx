@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react"
 
 // Le laboratoire est fictif et reste isolé de la session Supabase.
 // Le parent n'autorise qu'une clé dédiée au brouillon du laboratoire.
-const LAB_KEY = "crime-empire-world-map-v10-lab"
+const LAB_KEY = "crime-empire-world-map-v11-lab"
 const MAX_STATE_BYTES = 250_000
 
 type LabMessage = { type?: string; payload?: unknown }
@@ -39,15 +39,15 @@ export default function ModularZoneLab({ onBack }: Props) {
     <section className="absolute inset-0 z-[9100] bg-[#0a1119]">
       <iframe
         ref={iframeRef}
-        title="Crime Empire — Laboratoire World Map V10"
-        src="/modular-zone-01/index.html?v=10"
+        title="Crime Empire — Laboratoire World Map V11"
+        src="/modular-zone-01/index.html?v=11"
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         className="absolute inset-0 h-full w-full border-0"
       />
       <div className="absolute left-3 top-[max(6px,env(safe-area-inset-top))] z-20 flex gap-2 sm:left-auto sm:right-3">
         <a
-          href="/modular-zone-01/index.html?v=10"
+          href="/modular-zone-01/index.html?v=11"
           target="_blank"
           rel="noopener noreferrer"
           className="rounded-xl border border-zinc-500 bg-zinc-950/95 px-3 py-3 text-xs font-bold text-zinc-100 shadow-xl hover:bg-zinc-800"
