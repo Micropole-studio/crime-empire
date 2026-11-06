@@ -1,0 +1,24 @@
+CRIME EMPIRE — V16 OFFICIELLE (INTEGRATION VISUELLE)
+
+AVANT TOUT : créer une branche GitHub et garder le commit précédent pour retour en arrière.
+
+1) Copier le dossier public/world/v16/ (10 images) dans ton dépôt.
+2) Copier src/components/world/WorldMapV16Official.css dans le même dossier.
+3) Modifier dans src/components/world/WorldMap.tsx :
+   A. Ajouter près des imports : import "./WorldMapV16Official.css"
+   B. Dans la couche de caméra (ref={cameraLayerRef}), remplacer :
+      className="absolute left-0 top-0 will-change-transform"
+      par :
+      className="world-v16-scene absolute left-0 top-0 will-change-transform"
+   Le fichier CHANGEMENTS_WORLDMAP_V16.patch montre les 2 changements.
+4) Commit et push. Vérifier le build Ready, puis tester ville/monde/PvE/PvP sur l'aperçu Vercel.
+
+NE PAS remplacer WorldMap.tsx par une ancienne version.
+NE PAS toucher à App.tsx, ModularZoneLab.tsx, Supabase ni aux coordonnées.
+
+Ce patch active l'habillage V16 directement sur le vrai composant WorldMap.
+Les villes sont les vraies villes des joueurs et leurs positions viennent de Supabase.
+Les 4 lieux PvE ont des visuels indépendants, superposés aux zones cliquables existantes.
+Le laboratoire V16 reste disponible comme espace de test, mais ses changements locaux ne sont PAS synchronisés en production.
+
+Retrait : enlever "world-v16-scene" de la classe du calque caméra, puis revenir à l'ancien décor sans toucher aux données.
