@@ -1,80 +1,38 @@
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#09151d">
-  <title>Crime Empire — World Map V11 — Ancrage sol premium</title>
-  <link rel="stylesheet" href="./styles.css?v=11">
-</head>
-<body>
-  <canvas id="scene" aria-label="Carte du monde modulaire PvE PvP interactive, déplacez des villes et points d’intérêt, dessinez routes et quais."></canvas>
-  <div class="vignette" aria-hidden="true"></div>
-  <header class="topbar">
-    <div class="brand"><span class="crest">CE</span><div><b>CRIME EMPIRE</b><small>WORLD MAP • ANCRAGE SOL PREMIUM V11</small></div></div>
-    <div class="globaltag">RÉGION 1 <span>•</span> MONDE CONTINU · TEST ADMIN</div>
-    <div class="health" id="counts">64 × 48 cases</div>
-    <button id="previewExitBtn" hidden>← Retour à l’éditeur</button>
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0a0e0e"><title>Crime Empire — World Map V16 · Scène interactive</title><link rel="stylesheet" href="./style.css?v=16"></head><body>
+<div id="app">
+  <canvas id="world" aria-label="Carte du monde interactive Crime Empire"></canvas>
+  <div id="vignette"></div>
+  <header id="topbar">
+    <div class="logo"><span class="symbol">CE</span><div><b>CRIME EMPIRE</b><small>WORLD MAP · ÉDITION CINÉMATIQUE V16</small></div></div>
+    <div class="top-center">RÉGION 01 <i></i> DOMAINE CRIMINEL <i></i> <span id="count-top">9 lieux</span></div>
+    <div class="top-actions"><button id="preview" class="gold">◈ Vue joueur</button><button id="fit" title="Centrer la carte">⌂</button><button id="menu" title="Afficher/masquer l'éditeur">☷</button></div>
   </header>
-  <div id="scene-status" role="status" aria-live="polite" data-state="loading">Chargement du terrain et des structures PvE…</div>
-  <aside class="sidebar">
-    <div class="headline"><div><div class="eyebrow">LABORATOIRE WORLD MAP V11</div><h1>Ton monde, ancré au sol</h1></div><span class="vbadge">V11</span></div>
-    <p class="intro"><b>Carte du monde uniquement :</b> villes des joueurs, lieux PvE et territoire continu. Chaque structure reçoit une fondation et un ancrage sol dédiés.</p>
-    <div class="sectionlabel">1. Déplacer et modifier</div>
-    <div class="tools">
-      <button data-tool="move" class="active" aria-pressed="true">✥ Déplacer / explorer</button>
-      <button data-tool="inspect" aria-pressed="false">⌕ Inspecter</button>
+  <aside id="sidebar" aria-label="Outils administrateur">
+    <div class="panel-title"><small>ATELIER WORLD MAP</small><h1>Construire le monde</h1><p>La scène utilise les vrais détails de ton image. Les structures restent indépendantes.</p></div>
+    <div class="section">OUTILS</div>
+    <div class="toolrow"><button data-tool="select" class="active">✥ Sélection / déplacer</button><button data-tool="pan">☩ Explorer</button></div>
+    <div class="toolrow"><button data-tool="road">〰 Tracer route</button><button id="finish-road" disabled>✓ Terminer</button></div>
+    <div class="section">AJOUTER AU MONDE</div>
+    <div class="insert"><button data-add="city">🏛 Ville de joueur</button><button data-add="prison">▣ Prison régionale</button><button data-add="port">⚓ Port sombre</button><button data-add="blackmarket">◈ Marché noir</button><button data-add="weapons">⬡ Dépôt d'armes</button></div>
+    <div class="section">ÉLÉMENT SÉLECTIONNÉ</div>
+    <div id="selection-empty" class="muted">Sélectionne un bâtiment sur la carte pour modifier sa position.</div>
+    <div id="inspector" hidden><b id="sel-title">Ville</b><small id="sel-desc">Ville du joueur</small>
+      <label class="range-label" for="size">Taille <output id="size-value">100 %</output></label><input id="size" type="range" min="35" max="145" step="5" value="100">
+      <label class="range-label" for="angle">Rotation visuelle <output id="angle-value">0°</output></label><input id="angle" type="range" min="-20" max="20" step="1" value="0">
+      <div class="toolrow"><button id="nudge-left">←</button><button id="nudge-up">↑</button><button id="nudge-down">↓</button><button id="nudge-right">→</button></div>
+      <div class="toolrow"><button id="restore">⌖ Origine</button><button id="remove" class="danger">Supprimer</button></div>
     </div>
-    <div class="sectionlabel">2. Construire le terrain</div>
-    <div class="tools ground-tools">
-      <button data-tool="road">▰ Route</button>
-      <button data-tool="plot">▧ Parcelle</button>
-      <button data-tool="asphalt">◩ Asphalte</button>
-      <button data-tool="concrete">▦ Béton</button>
-      <button data-tool="grass">♣ Végétation</button>
-      <button data-tool="water">≈ Eau</button>
-      <button data-tool="quay">⚓ Quai</button>
-    </div>
-    <div class="sectionlabel">3. Villes et lieux PvE</div>
-    <div class="tools add-tools">
-      <button data-add="city">🏙 Ville joueur 2×2</button>
-      <button data-add="blackmarket">◈ Marché noir 2×2</button>
-      <button data-add="prison">▥ Prison 3×3</button>
-      <button data-add="port">⚓ Port sombre 3×3</button>
-      <button data-add="weapons">⬡ Dépôt d’armes 2×2</button>
-    </div>
-    <div class="sectionlabel">4. Décoration</div>
-    <div class="tools add-tools">
-      <button data-add="jardin">🌴 Bosquet 1×1</button>
-      <button data-add="ilot">🌿 Place 1×1</button>
-      <button data-add="portail">⛨ Contrôle 1×2</button>
-    </div>
-    <div class="sectionlabel">Objet sélectionné</div>
-    <div id="selection" class="selection" aria-live="polite"></div>
-    <div id="inspector" class="inspector" hidden>
-      <div class="footprint"><strong>EMPRISE EXACTE</strong><output id="footprintOutput">2 × 2 — 4 cases</output><output id="placementOutput" data-valid="true">✓ Placement valide</output></div>
-      <div class="nudge"><span>Déplacement d’une case</span><div>
-        <button data-nudge="0,-1" title="Colonne précédente">←</button>
-        <button data-nudge="-1,0" title="Ligne précédente">↑</button>
-        <button data-nudge="1,0" title="Ligne suivante">↓</button>
-        <button data-nudge="0,1" title="Colonne suivante">→</button>
-      </div></div>
-      <button id="removeNodeBtn" class="danger">Supprimer cet objet</button>
-    </div>
-    <div class="sectionlabel">Voir le rendu final</div>
-    <div class="tools"><button id="previewBtn">◈ Aperçu joueur</button><button id="fitVilla">◎ Centrer ville</button></div>
-    <div class="sectionlabel">Affichage / édition</div>
-    <div class="tools"><button id="gridBtn">Grille : masquée</button><button id="labelsBtn">Noms : visibles</button></div>
-    <div class="tools"><button id="undoBtn">↶ Annuler</button><button id="redoBtn">↷ Refaire</button></div>
-    <div class="tools"><button id="exportBtn">↓ Export JSON</button><button id="importBtn">↑ Import JSON</button></div>
-    <div class="tools"><button id="resetBtn" class="danger">Réinitialiser la carte</button></div>
-    <input type="file" accept="application/json,.json" id="importInput" hidden>
-    <p class="privacy">✓ Laboratoire isolé : positions et objets fictifs. Enregistrement local et export JSON. Aucune écriture Supabase.</p>
+    <div class="section">AFFICHAGE ET PROJET</div>
+    <div class="toolrow"><button id="snap" class="active">⌗ Snap : oui</button><button id="labels">Noms : non</button></div>
+    <div class="toolrow"><button id="undo">↶ Annuler</button><button id="redo">↷ Refaire</button></div>
+    <div class="toolrow"><button id="export">↓ Export JSON</button><button id="import">↑ Import</button></div>
+    <input id="file" type="file" accept=".json,application/json" hidden>
+    <button id="reset" class="reset">Restaurer la scène de départ</button>
+    <p class="footnote">Prototype indépendant : aucune modification Supabase. L’image constitue une référence artistique découpée ; les zones cachées reconstituées sous les bâtiments restent expérimentales.</p>
   </aside>
-  <div class="hudbottom">
-    <div class="hint"><span class="dot"></span><span><b>Déplacer :</b> attrape et glisse · <b>Construire :</b> modifie le sol · <b>Vue :</b> pince / molette</span></div>
-    <div class="zoom"><span id="zoomLabel">50%</span><button id="zoomOut" aria-label="Dézoomer">−</button><button id="home" aria-label="Vue générale">⌂</button><button id="zoomIn" aria-label="Zoomer">+</button></div>
-  </div>
-  <script defer src="./lab.js?v=11"></script>
-</body>
-</html>
+  <div id="location-tag">CARTE STRATÉGIQUE <span>•</span> PORT · MARCHÉ · PRISON · VILLES</div>
+  <div id="tooltip" hidden></div>
+  <div id="bottom"><span id="notice">Sélectionne un lieu ou explore la région.</span><div class="zoom"><span id="zoom-label">100 %</span><button id="zoom-out">−</button><button id="zoom-in">+</button></div></div>
+  <div id="mini"><canvas id="minimap" width="220" height="124"></canvas><span>RÉGION 01</span></div>
+  <div id="preview-return" hidden><button id="back-editor">← Quitter la vue joueur</button></div>
+</div><script src="./world.js?v=16" defer></script></body></html>
