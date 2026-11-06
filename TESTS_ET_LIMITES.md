@@ -1,16 +1,7 @@
-# Crime Empire V16 — Vérifications et limites
+# Vérifications conseillées
 
-## Contrôles effectués ici
-
-- Présence et décodage des dix WebP du ZIP V16.
-- Vérification du sélecteur `world-expanse-base` et des `data-world-node-id` utilisés dans le composant `WorldMap.tsx` V08 connu.
-- Deux modifications dans le composant : import de CSS et ajout de classe au calque de caméra ; **aucun changement aux services Supabase, noeuds, combats ou opérations**.
-- Rendu de la feuille de style avec une structure DOM de démonstration dans Chromium, 14 villes simulées et quatre hotspots PvE ; les images de terrain et de structures se chargent correctement.
-
-## Pas encore testés / ne pas présumer
-
-- Aucun build complet du dépôt actuel de Crime Empire n'a été exécuté : seul le dépôt Bouticelle est visible via la connexion GitHub.
-- Les interactions réelles PvE/PvP, l'échelle exacte à l'écran et les performances mobile doivent être testées sur le déploiement Vercel d'aperçu.
-- Les modifications faites dans l'éditeur/laboratoire V16 ne sont pas automatiquement partagées avec la région live.
-
-Le projet conserve les mêmes identifiants de villes, de joueurs et de POI. Le changement est **graphique uniquement** et entièrement réversible.
+- Fichiers V16 : les dix `.webp` doivent exister dans `public/world/v16/`.
+- Code : l'import de la CSS est la seule modification de logique nécessaire dans le point d'entrée.
+- Styles : `src/world-v16-live.css` cible directement les classes déjà présentes dans `WorldMap.tsx` (`world-expanse-base`, `world-player-city-render-layer` et `world-background-hotspot`).
+- Environnement : code fondé sur la dernière version de `WorldMap.tsx` disponible dans les archives de la conversation, pas une extraction en temps réel du dépôt.
+- Aucune action GitHub ni modification de Supabase effectuée.

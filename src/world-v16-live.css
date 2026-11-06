@@ -1,0 +1,140 @@
+/*
+  CRIME EMPIRE — WORLD MAP V16 : ACTIVATION DANS LE MONDE NORMAL
+  L'ancienne carte region-1-south.png est appelée par src/index.css avec !important.
+  Cette feuille est volontairement chargée APRES index.css depuis src/main.tsx.
+  Important: ne modifie PAS les données, les hotspots ni les fonctions PvE/PvP.
+  Uniquement appliqué à la vraie WorldMap (.world-expanse-base / data-world-node).
+*/
+
+/* Terrain du monde réel, PAS le terrain du laboratoire sous /modular-zone-01. */
+html body #root .world-expanse-base {
+  background-color: #293e31 !important;
+  background-image: url('/world/v16/terrain-restaure.webp') !important;
+  background-position: center center !important;
+  background-size: 100% 100% !important;
+  background-repeat: no-repeat !important;
+  box-shadow: inset 0 0 80px rgba(5, 13, 12, .18) !important;
+}
+
+/* Les villas V16 remplacent les anciennes images UNIQUEMENT sur la carte du monde. */
+html body #root [data-world-node] .world-player-city-render-layer {
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  pointer-events: none !important;
+}
+html body #root [data-world-node] .world-player-city-render-layer > span:nth-child(2) {
+  left: -17% !important;
+  right: -17% !important;
+  top: -22% !important;
+  bottom: -1% !important;
+  display: block !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+}
+html body #root [data-world-node] .world-player-city-render-layer > span:nth-child(2) > img {
+  opacity: 0 !important;
+}
+html body #root [data-world-node] .world-player-city-render-layer > span:nth-child(2)::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 118%;
+  height: 110%;
+  transform: translateX(-50%);
+  background: url('/world/v16/villa-centrale.webp') center bottom / contain no-repeat;
+  filter: drop-shadow(0 4px 3px rgba(6,13,10,.38));
+  pointer-events: none;
+}
+html body #root [data-world-node] .world-player-city-halo {
+  opacity: .16 !important;
+  filter: blur(5px) !important;
+  top: 78% !important;
+  height: 17% !important;
+  width: 80% !important;
+}
+html body #root [data-world-node] .world-player-city-label {
+  border: 1px solid rgba(220,181,106,.58) !important;
+  background: rgba(13,20,19,.91) !important;
+  color: #ffe6b4 !important;
+  font-size: 12px !important;
+  letter-spacing: .015em !important;
+  padding: 5px 10px !important;
+  box-shadow: 0 4px 9px rgba(0,0,0,.4) !important;
+}
+
+/* Les POI PvE sont des boutons existants. Les illustrations ci-dessous ne capturent
+   aucun événement; clics, timer, panneau et récompenses restent intacts. */
+html body #root [data-world-node-id="port-sombre"],
+html body #root [data-world-node-id="black-market"],
+html body #root [data-world-node-id="district-network"],
+html body #root [data-world-node-id="weapons-depot"] {
+  background: none !important;
+  overflow: visible !important;
+}
+html body #root [data-world-node-id="port-sombre"] > .world-background-hotspot,
+html body #root [data-world-node-id="black-market"] > .world-background-hotspot,
+html body #root [data-world-node-id="district-network"] > .world-background-hotspot,
+html body #root [data-world-node-id="weapons-depot"] > .world-background-hotspot {
+  background: none !important;
+  overflow: visible !important;
+  border-color: transparent !important;
+}
+html body #root [data-world-node-id="port-sombre"] > .world-background-hotspot::before,
+html body #root [data-world-node-id="black-market"] > .world-background-hotspot::before,
+html body #root [data-world-node-id="district-network"] > .world-background-hotspot::before,
+html body #root [data-world-node-id="weapons-depot"] > .world-background-hotspot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-position: center 68%;
+  background-repeat: no-repeat;
+  background-size: var(--ce-v16-poi-size, 46%) auto;
+  filter: drop-shadow(0 8px 5px rgba(4,12,10,.36));
+  pointer-events: none;
+}
+html body #root [data-world-node-id="port-sombre"] > .world-background-hotspot::before {
+  background-image: url('/world/v16/port-sombre.webp');
+  --ce-v16-poi-size: 50%;
+}
+html body #root [data-world-node-id="black-market"] > .world-background-hotspot::before {
+  background-image: url('/world/v16/marche-noir.webp');
+  --ce-v16-poi-size: 39%;
+}
+html body #root [data-world-node-id="district-network"] > .world-background-hotspot::before {
+  background-image: url('/world/v16/prison-regionale.webp');
+  --ce-v16-poi-size: 49%;
+}
+html body #root [data-world-node-id="weapons-depot"] > .world-background-hotspot::before {
+  background-image: url('/world/v16/depot-armes.webp');
+  --ce-v16-poi-size: 45%;
+}
+/* Il n'y a pas encore de sprite dédié pour le chantier clandestin.
+   Ne pas le supprimer : le gameplay doit rester accessible. */
+html body #root [data-world-node-id="illegal-construction-site"] > .world-background-hotspot::before {
+  content: '🏗';
+  display: grid;
+  position: absolute;
+  inset: 0;
+  place-items: center;
+  font-size: clamp(34px, 3.5vw, 80px);
+  filter: drop-shadow(0 5px 5px #0009);
+  pointer-events: none;
+}
+/* Ville de repli si la liste des joueurs ne s'est pas encore chargée. */
+html body #root [data-world-node-id="current-player-city-fallback"] > .world-background-hotspot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('/world/v16/villa-centrale.webp') center 70% / 55% auto no-repeat;
+  pointer-events: none;
+}
+html body #root [data-world-node] > .world-background-hotspot.is-selected {
+  border-color: rgba(254,215,132,.80) !important;
+  box-shadow: inset 0 0 28px rgba(247,196,95,.09), 0 0 15px rgba(247,196,95,.18) !important;
+}
+html body #root [data-world-node]:focus-visible { outline: 3px solid #ffdd92 !important; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  html body #root [data-world-node] { transition: none !important; }
+}

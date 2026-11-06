@@ -1,0 +1,6 @@
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@
+ import './index.css'
++import './world-v16-live.css' // V16 : affichage normal du Monde
+ import App from './App.tsx'
