@@ -56,5 +56,18 @@ el('export').addEventListener('click',()=>{const blob=new Blob([JSON.stringify(s
 window.addEventListener('keydown',e=>{if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;if(e.key==='Escape'){drawPath=[];toolSet('select');changed=true;}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undoRedo(undo,redo);}});
 window.addEventListener('resize',resize);if(!sidebar)el('sidebar').classList.add('closed');
 resize();updateInspector();requestAnimationFrame(tick);setNotice('✓ World Map V16 · illustration découpée · éditeur interactif');
+
+// Pont de publication : le parent React demande un instantané immédiat.
+// L'iframe reste sandboxée et ne reçoit jamais de clé Supabase.
+window.addEventListener('message', event => {
+  if (window.parent===window || event.source!==window.parent) return;
+  if (event.data?.type!=='crime-empire:lab:snapshot-request') return;
+  const requestId=event.data.requestId;
+  if (typeof requestId!=='string'||requestId.length>96) return;
+  window.parent.postMessage({
+    type:'crime-empire:lab:snapshot',requestId,
+    payload:JSON.stringify(state)
+  }, '*');
+});
 window.__CE_WORLD_V16__={getState:()=>structuredClone(state),getAssets:()=>({loaded,errors,expected:sources.size}),getZoom:()=>zoom,getCamera:()=>({zoom,ox,oy,w,h}),add,select:(id)=>{selected=id;updateInspector();},fit};
 })();

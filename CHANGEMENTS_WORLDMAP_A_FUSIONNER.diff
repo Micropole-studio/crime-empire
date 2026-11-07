@@ -1,0 +1,58 @@
+--- a/src/components/world/WorldMap.tsx
++++ b/src/components/world/WorldMap.tsx
+@@ -28,6 +28,9 @@
+ import {
+   DEFAULT_WORLD_CITY_RENDER_TEMPLATE,
+ } from "../../data/worldCityRenderTemplate"
++
++import { loadPublishedV16Scene, applyPublishedV16Pois, type V16PublishedScene } from "../../services/worldVisualSceneService"
++import WorldV16PublishedRoads from "./WorldV16PublishedRoads"
+ 
+ import WorldOperationPanel from "./WorldOperationPanel"
+ 
+@@ -320,6 +323,26 @@
+     })
+ 
+   const worldSize = DEFAULT_WORLD_SIZE
++
++  // V16 publiée : chargement partagé à chaque ouverture du Monde.
++  // Ne touche jamais aux coordonnées des joueurs réels.
++  const [publishedV16Scene,setPublishedV16Scene] = useState<V16PublishedScene|null>(null)
++  useEffect(() => {
++    let active=true
++    const refresh=async()=>{
++      try {
++        const publication=await loadPublishedV16Scene()
++        if(active)setPublishedV16Scene(publication?.scene??null)
++      } catch(err){
++        console.warn("Carte V16 publiée indisponible, utilisation de la carte actuelle",err)
++      }
++    }
++    void refresh()
++    const onVisible=()=>{if(document.visibilityState==="visible")void refresh()}
++    document.addEventListener("visibilitychange",onVisible)
++    return ()=>{active=false;document.removeEventListener("visibilitychange",onVisible)}
++  },[])
++
+ 
+   const [
+     worldPlayers,
+@@ -1050,8 +1073,8 @@
+ 
+   const staticNodes =
+     useMemo(
+-      () => createWorldNodes(),
+-      []
++      () => applyPublishedV16Pois(createWorldNodes(),publishedV16Scene),
++      [publishedV16Scene]
+     )
+ 
+   const currentWorldPlayer =
+@@ -2298,6 +2321,7 @@
+           }}
+         >
+           <div className="world-expanse-base pointer-events-none absolute inset-0" />
++          <WorldV16PublishedRoads scene={publishedV16Scene} />
+ 
+           {relocationMode && (
+             <WorldRelocationSlotsLayer
