@@ -9,9 +9,9 @@ export const WORLD_V16_DRAFT_KEY = "crime-empire-world-v16-reference-edit";
 const SOURCES = new Set([
   "villa-ouest.webp", "villa-est.webp", "villa-centrale.webp", "villa-sud.webp",
   "villa-rivage.webp", "prison-regionale.webp", "port-sombre.webp",
-  "marche-noir.webp", "depot-armes.webp",
+  "marche-noir.webp", "depot-armes.webp", "chantier-clandestin.webp",
 ]);
-const KINDS = new Set(["city", "port", "prison", "blackmarket", "weapons"]);
+const KINDS = new Set(["city", "port", "prison", "blackmarket", "weapons", "construction"]);
 export type V16SceneNode = {
   id: string; kind: string; src: string; label?: string;
   x: number; y: number; w: number; h: number; scale: number;
@@ -72,7 +72,7 @@ export async function publishV16Scene(scene:V16PublishedScene,expectedRevision:n
 
 const POI_IDS:Record<string,string>={
   "port":"port-sombre", "prison":"district-network",
-  "blackmarket":"black-market", "weapons":"weapons-depot",
+  "blackmarket":"black-market", "weapons":"weapons-depot", "construction":"illegal-construction-site",
 };
 /** Les villes réelles ne sont jamais repositionnées par ce fichier. */
 export function applyPublishedV16Pois(nodes:WorldNode[],scene:V16PublishedScene|null):WorldNode[]{

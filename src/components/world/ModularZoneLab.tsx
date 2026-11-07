@@ -79,7 +79,7 @@ export default function ModularZoneLab({onBack}:Props){
   }
   return <section className="absolute inset-0 z-[9100] bg-[#0a1119]">
     <iframe ref={iframeRef} title="Crime Empire — Éditeur World Map V16"
-      src="/modular-zone-01/index.html?v=16-publish" sandbox="allow-scripts"
+      src="/modular-zone-01/index.html?v=16-4" sandbox="allow-scripts"
       referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full border-0" />
     <div className="absolute right-3 top-[max(6px,env(safe-area-inset-top))] z-20 flex flex-wrap justify-end gap-2">
       <button type="button" disabled={publishing} onClick={()=>{void publish();}}

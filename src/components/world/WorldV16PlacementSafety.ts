@@ -7,7 +7,7 @@ import type { V16PublishedScene, V16SceneNode } from "../../services/worldVisual
 
 const ART_W = 1672
 const ART_H = 941
-const POI_KINDS = new Set(["port", "prison", "blackmarket", "weapons"])
+const POI_KINDS = new Set(["port", "prison", "blackmarket", "weapons", "construction"])
 
 export type WorldNormalizedPoint = { x: number; y: number }
 

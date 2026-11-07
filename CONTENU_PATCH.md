@@ -1,11 +1,9 @@
-# Patch V16.1 : laboratoire → monde normal
+# V16.4 — fichiers du correctif
 
-- `src/components/world/ModularZoneLab.tsx` : bouton Publier + passerelle sécurisée.
-- `public/modular-zone-01/world.js` : snapshot immédiat de l'éditeur.
-- `src/services/worldVisualSceneService.ts` : validation et lecture/écriture Supabase.
-- `src/components/world/WorldV16PublishedRoads.tsx` : routes de l'éditeur dans la vraie carte.
-- `supabase/migrations/20261106_world_visual_scene_publish.sql` : table et RPC admin.
-- `CHANGEMENTS_WORLDMAP_A_FUSIONNER.diff` : 4 changements à fusionner, **sans remplacer WorldMap.tsx**.
-- `INSTALLATION_ET_PUBLICATION.md` : procédure et tests.
+Ce ZIP apporte les modifications du Chantier clandestin uniquement. Il ne contient **pas** un ancien `WorldMap.tsx` : garde celui de ta V16.3.
 
-La maquette V16 reste indépendante tant qu'on ne publie pas. Les villes réelles ne sont pas déplacées automatiquement.
+- Nouveau sprite dédié transparent (même univers de nuit et noir-or que Crime Empire).
+- Site PvE de niveau 2 préposé dans l’éditeur ; déplacement, sélection, taille/rotation et publication disponibles.
+- Migration douce des anciens brouillons V16, sans effacement de la carte.
+- Prise en charge de `construction` dans la validation navigateur, la liste blanche SQL, le rendu SVG publié et les contrôles de collision de la V16.3.
+- Correspondance exacte `construction` → `illegal-construction-site` dans `createWorldNodes()`.

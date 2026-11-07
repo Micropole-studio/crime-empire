@@ -12,7 +12,7 @@ import "./WorldV16PublishedArtwork.css";
 const ART_W = 1672;
 const ART_H = 941;
 const ASSET_ROOT = "/world/v16/";
-const POI_KINDS = new Set(["prison", "port", "blackmarket", "weapons"]);
+const POI_KINDS = new Set(["prison", "port", "blackmarket", "weapons", "construction"]);
 
 function roadPath(road: V16Point[]): string {
   if (road.length < 2) return "";
