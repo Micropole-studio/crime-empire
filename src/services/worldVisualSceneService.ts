@@ -82,12 +82,18 @@ export function applyPublishedV16Pois(nodes:WorldNode[],scene:V16PublishedScene|
   return nodes.map((node)=>{
     const placement=overrides.get(node.id);
     if(!placement)return node;
-    // Projection exacte selon le même fond 1672x941 que l'éditeur.
+    // Le sprite de l'éditeur est redimensionné autour de sa base (centre-bas).
+    // Son centre visuel reste x + w/2, même quand scale change.
+    // Le hotspot React est centré : utiliser le CENTRE du rectangle réellement dessiné.
+    const visibleW = placement.w * placement.scale;
+    const visibleH = placement.h * placement.scale;
+    const centerX = placement.x + placement.w / 2;
+    const centerY = placement.y + placement.h - visibleH / 2;
     return {...node,
-      x:Number(((placement.x+placement.w*placement.scale/2)/V16_ART_W*100).toFixed(3)),
-      y:Number(((placement.y+placement.h)/V16_ART_H*100).toFixed(3)),
-      hotspotWidth:Number((placement.w*placement.scale/V16_ART_W*100).toFixed(3)),
-      hotspotHeight:Number((placement.h*placement.scale/V16_ART_H*100).toFixed(3)),
+      x:Number((centerX / V16_ART_W * 100).toFixed(3)),
+      y:Number((centerY / V16_ART_H * 100).toFixed(3)),
+      hotspotWidth:Number((visibleW / V16_ART_W * 100).toFixed(3)),
+      hotspotHeight:Number((visibleH / V16_ART_H * 100).toFixed(3)),
       hotspotRotation:placement.rotation,
     };
   });

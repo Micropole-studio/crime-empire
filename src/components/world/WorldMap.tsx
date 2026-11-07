@@ -28,6 +28,14 @@ import {
   DEFAULT_WORLD_CITY_RENDER_TEMPLATE,
 } from "../../data/worldCityRenderTemplate"
 
+// V16.2 — la même scène validée par l'administrateur est utilisée dans le Monde.
+import {
+  applyPublishedV16Pois,
+  loadPublishedV16Scene,
+  type V16PublishedScene,
+} from "../../services/worldVisualSceneService"
+import WorldV16PublishedArtwork from "./WorldV16PublishedArtwork"
+
 import WorldOperationPanel from "./WorldOperationPanel"
 
 import {
@@ -319,6 +327,40 @@ export default function WorldMap({
     })
 
   const worldSize = DEFAULT_WORLD_SIZE
+
+  // Scène officiellement publiée depuis Test modulaire V16.
+  // Jamais de villes fictives ici : seules les villes Supabase existent en jeu.
+  const [publishedV16Scene, setPublishedV16Scene] =
+    useState<V16PublishedScene | null>(null)
+
+  useEffect(() => {
+    let active = true
+    const refreshPublishedScene = async () => {
+      try {
+        const publication = await loadPublishedV16Scene()
+        if (active) {
+          setPublishedV16Scene(publication?.scene ?? null)
+        }
+      } catch (error) {
+        console.warn(
+          "Carte V16 publiée indisponible : ancien décor conservé",
+          error,
+        )
+      }
+    }
+
+    void refreshPublishedScene()
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshPublishedScene()
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    return () => {
+      active = false
+      document.removeEventListener("visibilitychange", onVisible)
+    }
+  }, [])
 
   const [
     worldPlayers,
@@ -1049,8 +1091,8 @@ export default function WorldMap({
 
   const staticNodes =
     useMemo(
-      () => createWorldNodes(),
-      []
+      () => applyPublishedV16Pois(createWorldNodes(), publishedV16Scene),
+      [publishedV16Scene]
     )
 
   const currentWorldPlayer =
@@ -2281,7 +2323,9 @@ export default function WorldMap({
       >
         <div
           ref={cameraLayerRef}
-          className="absolute left-0 top-0 will-change-transform"
+          className={`absolute left-0 top-0 will-change-transform ${
+            publishedV16Scene ? "world-v16-published" : ""
+          }`}
           style={{
             width: worldSize.width,
             height: worldSize.height,
@@ -2289,6 +2333,7 @@ export default function WorldMap({
           }}
         >
           <div className="world-expanse-base pointer-events-none absolute inset-0" />
+          <WorldV16PublishedArtwork scene={publishedV16Scene} />
 
           {relocationMode && (
             <WorldRelocationSlotsLayer

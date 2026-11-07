@@ -1,0 +1,28 @@
+/* V16.2 — la scène publiée devient une unique couche graphique cohérente. */
+.ce-v16-published-artwork { display: block; overflow: visible; user-select: none; }
+/* Le décor raster est maintenant dessiné PAR la couche SVG, en dernier par-dessus
+   les backgrounds V16 et pré-V16. Les POI restent interactifs via les boutons. */
+html body #root .world-v16-published [data-world-node-id="port-sombre"],
+html body #root .world-v16-published [data-world-node-id="black-market"],
+html body #root .world-v16-published [data-world-node-id="district-network"],
+html body #root .world-v16-published [data-world-node-id="weapons-depot"] {
+  background-image: none !important;
+  filter: none !important;
+}
+html body #root .world-v16-published [data-world-node-id="port-sombre"] > .world-background-hotspot::before,
+html body #root .world-v16-published [data-world-node-id="black-market"] > .world-background-hotspot::before,
+html body #root .world-v16-published [data-world-node-id="district-network"] > .world-background-hotspot::before,
+html body #root .world-v16-published [data-world-node-id="weapons-depot"] > .world-background-hotspot::before {
+  content: none !important;
+  background-image: none !important;
+}
+html body #root .world-v16-published [data-world-node-id="port-sombre"] > .world-background-hotspot,
+html body #root .world-v16-published [data-world-node-id="black-market"] > .world-background-hotspot,
+html body #root .world-v16-published [data-world-node-id="district-network"] > .world-background-hotspot,
+html body #root .world-v16-published [data-world-node-id="weapons-depot"] > .world-background-hotspot {
+  background: transparent !important;
+}
+html body #root .world-v16-published [data-world-node-id] > .world-background-hotspot.is-selected {
+  outline: 2px solid rgba(253, 220, 143, .82);
+  outline-offset: 0;
+}
