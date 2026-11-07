@@ -35,6 +35,7 @@ import {
   type V16PublishedScene,
 } from "../../services/worldVisualSceneService"
 import WorldV16PublishedArtwork from "./WorldV16PublishedArtwork"
+import { getSafeV16RelocationSlots, getV16CityConflict } from "./WorldV16PlacementSafety"
 
 import WorldOperationPanel from "./WorldOperationPanel"
 
@@ -668,7 +669,13 @@ export default function WorldMap({
 
     try {
       const slots = await loadAvailableWorldSlots()
-      setRelocationSlots(slots)
+      // V16.3 : ne propose pas une parcelle qui chevauche les lieux PvE publiés.
+      // Le serveur reste l'autorité pour attribuer réellement la place.
+      const safeSlots = getSafeV16RelocationSlots(slots, publishedV16Scene)
+      setRelocationSlots(safeSlots)
+      if (safeSlots.length === 0) {
+        setRelocationError("Aucune parcelle libre hors des lieux PvE. Vérifie les emplacements côté serveur.")
+      }
       setSelectedNode(null)
       setRelocationMode(true)
     } catch (error) {
@@ -680,7 +687,7 @@ export default function WorldMap({
     } finally {
       setRelocationLoading(false)
     }
-  }, [])
+  }, [publishedV16Scene])
 
   const cancelRelocationMode = useCallback(() => {
     setRelocationMode(false)
@@ -690,6 +697,11 @@ export default function WorldMap({
 
   const handleRelocationSlot = useCallback(
     async (slot: WorldSpawnSlot) => {
+      // Une région peut être republiée pendant l'écran de déplacement.
+      if (getV16CityConflict(slot, publishedV16Scene)) {
+        setRelocationError("Impossible : cet emplacement chevauche un lieu PvE publié.")
+        return
+      }
       const confirmed = window.confirm(
         "Déplacer ta ville sur cet emplacement ?"
       )
@@ -725,7 +737,7 @@ export default function WorldMap({
         setRelocationLoading(false)
       }
     },
-    [refreshWorldPlayers]
+    [refreshWorldPlayers, publishedV16Scene]
   )
 
   useEffect(() => {
@@ -1197,6 +1209,13 @@ export default function WorldMap({
     () => [...staticNodes, ...playerNodes],
     [playerNodes, staticNodes]
   )
+
+  // V16.3 — positions réelles des joueurs vs. bâtiments PvE du décor publié.
+  // Une ville en conflit reste à ses coordonnées serveur ; on la représente par
+  // un marqueur compact afin de ne plus empiler deux gros bâtiments à l'écran.
+  const conflictingCityIds = useMemo(() => new Set(
+    playerNodes.filter((n) => getV16CityConflict(n, publishedV16Scene)).map((n) => n.id),
+  ), [playerNodes, publishedV16Scene])
 
   const effectiveCityRenderTemplate =
     cityRenderEditorOpen && isAdmin
@@ -2372,6 +2391,7 @@ export default function WorldMap({
                 node={
                   node
                 }
+                visualConflict={conflictingCityIds.has(node.id)}
                 selected={
                   selectedNode?.id ===
                   node.id
@@ -3098,6 +3118,7 @@ function WorldTemplateSlider({
 type WorldNodeMarkerProps = {
   node: WorldNode
   selected: boolean
+  visualConflict?: boolean
   cityRenderTemplate: WorldCityRenderTemplate
   onSelect: () => void
 }
@@ -3105,6 +3126,7 @@ type WorldNodeMarkerProps = {
 function WorldNodeMarker({
   node,
   selected,
+  visualConflict = false,
   cityRenderTemplate,
   onSelect,
 }: WorldNodeMarkerProps) {
@@ -3133,7 +3155,7 @@ function WorldNodeMarker({
           transform: "translate(-50%, -50%)",
         }}
         aria-label={`Ouvrir ${node.name}`}
-        title={node.name}
+        aria-description={visualConflict ? "Emplacement en conflit avec un lieu PvE. Sélectionner la ville pour utiliser Déplacer ma ville." : undefined}
       >
         <span
           className="world-player-city-render-layer ce-world-grounded-city pointer-events-none absolute h-full w-full"
@@ -3144,8 +3166,8 @@ function WorldNodeMarker({
           }}
         >
           {/* Socle d'accroche : sous la villa, sans modifier le hotspot ni l'ancrage Supabase. */}
-          <span className="ce-world-city-contact pointer-events-none absolute" aria-hidden="true" />
-          <span
+          {!visualConflict && <span className="ce-world-city-contact pointer-events-none absolute" aria-hidden="true" />}
+          {!visualConflict && <span
             className={`world-player-city-halo absolute left-1/2 top-[54%] h-[72%] w-[84%] -translate-x-1/2 -translate-y-1/2 rounded-full ${
               selected
                 ? "is-selected"
@@ -3155,16 +3177,29 @@ function WorldNodeMarker({
                 ? "is-current"
                 : "is-rival"
             }`}
-          />
+          />}
 
-          <span className="absolute inset-x-0 bottom-[18%] top-[8%] flex items-end justify-center">
-            <img
-              src={node.mapAssetSrc ?? "/buildings/villa.png"}
-              alt=""
-              className="world-player-city-asset max-h-full max-w-full object-contain"
-              draggable={false}
-            />
-          </span>
+          {visualConflict ? (
+            <span
+              className="ce-v16-city-conflict pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-amber-300 bg-slate-950/95 text-amber-100 shadow-xl"
+              style={{ width: "44%", height: "44%", minWidth: 52, minHeight: 52 }}
+              aria-hidden="true"
+            >
+              <span className="flex flex-col items-center leading-none">
+                <span className="text-[21px]">⌂</span>
+                <span className="text-[11px] font-black text-amber-300">!</span>
+              </span>
+            </span>
+          ) : (
+            <span className="absolute inset-x-0 bottom-[18%] top-[8%] flex items-end justify-center">
+              <img
+                src={node.mapAssetSrc ?? "/buildings/villa.png"}
+                alt=""
+                className="world-player-city-asset max-h-full max-w-full object-contain"
+                draggable={false}
+              />
+            </span>
+          )}
         </span>
 
         <span
@@ -3178,7 +3213,7 @@ function WorldNodeMarker({
             top: `${82 + cityRenderTemplate.offsetY + cityRenderTemplate.labelOffsetY}%`,
           }}
         >
-          {isCurrent ? "VOUS" : node.username ?? node.name}
+          {visualConflict ? "⚠ " : ""}{isCurrent ? "VOUS" : node.username ?? node.name}
           <span className="ml-1 opacity-60">Niv. {node.level}</span>
         </span>
       </button>
